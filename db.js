@@ -187,6 +187,22 @@ if (usePostgres) {
           await pool.query('INSERT INTO menus (name, "order") VALUES ($1, $2)', [name, order]);
         }
         console.log('默认菜单插入完成');
+        
+        // 插入示例卡片
+        const defaultCards = [
+          [1, 'Google', 'https://www.google.com', 'https://www.google.com/favicon.ico', '搜索引擎', 1],
+          [1, 'GitHub', 'https://github.com', 'https://github.com/favicon.ico', '代码托管平台', 2],
+          [2, 'ChatGPT', 'https://chat.openai.com', 'https://chat.openai.com/favicon.ico', 'AI 对话助手', 1],
+          [2, 'Claude', 'https://claude.ai', 'https://claude.ai/favicon.ico', 'Anthropic AI', 2]
+        ];
+        
+        for (const [menuId, title, url, logo, desc, order] of defaultCards) {
+          await pool.query(
+            'INSERT INTO cards (menu_id, title, url, logo_url, "desc", "order") VALUES ($1, $2, $3, $4, $5, $6)',
+            [menuId, title, url, logo, desc, order]
+          );
+        }
+        console.log('示例卡片插入完成');
       }
       
       // 管理员账号
@@ -292,7 +308,19 @@ if (usePostgres) {
         ];
         const stmt = db.prepare('INSERT INTO menus (name, "order") VALUES (?, ?)');
         defaultMenus.forEach(([name, order]) => stmt.run(name, order));
-        stmt.finalize();
+        stmt.finalize(() => {
+          // 插入示例卡片
+          const defaultCards = [
+            [1, 'Google', 'https://www.google.com', 'https://www.google.com/favicon.ico', '搜索引擎', 1],
+            [1, 'GitHub', 'https://github.com', 'https://github.com/favicon.ico', '代码托管平台', 2],
+            [2, 'ChatGPT', 'https://chat.openai.com', 'https://chat.openai.com/favicon.ico', 'AI 对话助手', 1],
+            [2, 'Claude', 'https://claude.ai', 'https://claude.ai/favicon.ico', 'Anthropic AI', 2]
+          ];
+          const cardStmt = db.prepare('INSERT INTO cards (menu_id, title, url, logo_url, "desc", "order") VALUES (?, ?, ?, ?, ?, ?)');
+          defaultCards.forEach(card => cardStmt.run(...card));
+          cardStmt.finalize();
+          console.log('示例卡片插入完成');
+        });
         console.log('默认菜单插入完成');
       }
     });
