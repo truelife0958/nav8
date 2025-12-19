@@ -266,11 +266,16 @@ db.serialize(() => {
     });
   }
 
-  // 插入默认管理员账号
-  db.get('SELECT COUNT(*) as count FROM users', (err, row) => {
-    if (row && row.count === 0) {
-      const passwordHash = bcrypt.hashSync(config.admin.password, 10);
+  // 插入或更新管理员账号（支持环境变量修改密码）
+  db.get('SELECT * FROM users WHERE username = ?', [config.admin.username], (err, row) => {
+    const passwordHash = bcrypt.hashSync(config.admin.password, 10);
+    if (!row) {
       db.run('INSERT INTO users (username, password) VALUES (?, ?)', [config.admin.username, passwordHash]);
+      console.log('已创建管理员账号:', config.admin.username);
+    } else {
+      // 每次启动时更新密码（确保环境变量生效）
+      db.run('UPDATE users SET password = ? WHERE username = ?', [passwordHash, config.admin.username]);
+      console.log('已更新管理员密码');
     }
   });
 
