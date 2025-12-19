@@ -75,3 +75,12 @@ export const deleteFriend = (id) => api.delete(`/friends/${id}`, { headers: auth
 export const getUserProfile = () => api.get('/users/profile', { headers: authHeaders() });
 export const changePassword = (oldPassword, newPassword) => api.put('/users/password', { oldPassword, newPassword }, { headers: authHeaders() });
 export const getUsers = () => api.get('/users', { headers: authHeaders() });
+
+// 导入API
+export const importBookmarks = (file, menuId, subMenuId) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('menu_id', menuId);
+  if (subMenuId) formData.append('sub_menu_id', subMenuId);
+  return api.post('/import', formData, { headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' } });
+};

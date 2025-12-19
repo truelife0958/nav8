@@ -9,6 +9,7 @@ const authRoutes = require('./routes/auth');
 const adRoutes = require('./routes/ad');
 const friendRoutes = require('./routes/friend');
 const userRoutes = require('./routes/user');
+const importRoutes = require('./routes/import');
 const compression = require('compression');
 const app = express();
 
@@ -60,6 +61,7 @@ app.use('/api', authRoutes);
 app.use('/api/ads', adRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/import', importRoutes);
 
 // SPA路由处理 - 所有非API和非静态文件请求返回index.html
 app.get('*', (req, res, next) => {

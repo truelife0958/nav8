@@ -22,6 +22,12 @@
           </svg>
           添加卡片
         </button>
+        <button class="btn btn-import" @click="showImportModal = true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+          </svg>
+          导入书签
+        </button>
       </div>
     </div>
     
@@ -76,6 +82,51 @@
         </tbody>
       </table>
     </div>
+    
+    <!-- 导入书签弹窗 -->
+    <div v-if="showImportModal" class="modal-overlay" @click="showImportModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>导入浏览器书签</h3>
+          <button @click="showImportModal = false" class="close-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="import-tip">支持导入浏览器导出的书签文件（HTML格式）或 JSON 格式书签文件</p>
+          <div class="import-form">
+            <div class="form-group">
+              <label>目标菜单</label>
+              <select v-model="importMenuId" class="input">
+                <option v-for="menu in menus" :value="menu.id" :key="menu.id">{{ menu.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>目标子菜单（可选）</label>
+              <select v-model="importSubMenuId" class="input">
+                <option value="">主菜单</option>
+                <option v-for="subMenu in importSubMenus" :value="subMenu.id" :key="subMenu.id">{{ subMenu.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>选择书签文件</label>
+              <input type="file" ref="importFileInput" accept=".html,.htm,.json" @change="handleFileSelect" class="file-input" />
+            </div>
+            <div v-if="importFileName" class="selected-file">
+              已选择: {{ importFileName }}
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-cancel" @click="showImportModal = false">取消</button>
+          <button class="btn" @click="handleImport" :disabled="!importFile || importing">
+            {{ importing ? '导入中...' : '开始导入' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -88,7 +139,8 @@ import {
   updateCard as apiUpdateCard,
   deleteCard as apiDeleteCard,
   batchDeleteCards,
-  batchMoveCards
+  batchMoveCards,
+  importBookmarks
 } from '../../api';
 import Toast from '../../components/Toast.vue';
 
@@ -107,6 +159,21 @@ const batchTargetSubMenuId = ref('');
 
 // Toast提示
 const toast = ref({ show: false, message: '', type: 'info' });
+
+// 导入书签相关
+const showImportModal = ref(false);
+const importMenuId = ref('');
+const importSubMenuId = ref('');
+const importFile = ref(null);
+const importFileName = ref('');
+const importing = ref(false);
+const importFileInput = ref(null);
+
+const importSubMenus = computed(() => {
+  if (!importMenuId.value) return [];
+  const menu = menus.value.find(m => m.id === importMenuId.value);
+  return menu?.subMenus || [];
+});
 
 function showToast(message, type = 'info') {
   toast.value = { show: true, message, type };
@@ -134,6 +201,7 @@ onMounted(async () => {
   if (menus.value.length) {
     selectedMenuId.value = menus.value[0].id;
     selectedSubMenuId.value = '';
+    importMenuId.value = menus.value[0].id;
   }
 });
 
@@ -263,6 +331,44 @@ async function deleteCard(id) {
     loadCards();
   } catch (error) {
     showToast('删除卡片失败: ' + (error.response?.data?.error || error.message), 'error');
+  }
+}
+
+// 导入书签相关
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) {
+    importFile.value = file;
+    importFileName.value = file.name;
+  }
+}
+
+async function handleImport() {
+  if (!importFile.value) {
+    showToast('请选择书签文件', 'warning');
+    return;
+  }
+  if (!importMenuId.value) {
+    showToast('请选择目标菜单', 'warning');
+    return;
+  }
+  
+  importing.value = true;
+  try {
+    const res = await importBookmarks(importFile.value, importMenuId.value, importSubMenuId.value || null);
+    showToast(`成功导入 ${res.data.imported}/${res.data.total} 个书签`, 'success');
+    showImportModal.value = false;
+    importFile.value = null;
+    importFileName.value = '';
+    if (importFileInput.value) importFileInput.value.value = '';
+    // 如果导入到当前菜单，刷新列表
+    if (importMenuId.value === selectedMenuId.value) {
+      loadCards();
+    }
+  } catch (error) {
+    showToast('导入失败: ' + (error.response?.data?.error || error.message), 'error');
+  } finally {
+    importing.value = false;
   }
 }
 </script>
@@ -520,6 +626,100 @@ async function deleteCard(id) {
 /* 选中行高亮 */
 tr.selected {
   background: #eff6ff;
+}
+
+/* 导入按钮 */
+.btn-import {
+  background: #8b5cf6;
+}
+.btn-import:hover {
+  background: #7c3aed;
+}
+
+/* 导入弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 450px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #1f2937;
+}
+.close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #6b7280;
+}
+.close-btn:hover {
+  color: #ef4444;
+}
+.modal-body {
+  padding: 20px;
+}
+.import-tip {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0 0 16px 0;
+}
+.import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-group label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+.form-group .input {
+  width: 100%;
+}
+.file-input {
+  padding: 8px;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+.selected-file {
+  color: #059669;
+  font-size: 0.85rem;
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
 }
 
 @media (max-width: 768px) {
