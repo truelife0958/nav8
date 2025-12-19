@@ -13,6 +13,9 @@ const importRoutes = require('./routes/import');
 const compression = require('compression');
 const app = express();
 
+// 信任反向代理（Zeabur/Nginx等）
+app.set('trust proxy', 1);
+
 const PORT = process.env.PORT || 3000;
 
 // 请求频率限制 - 通用API限制
