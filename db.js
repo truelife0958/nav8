@@ -15,22 +15,37 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
+// 转换 SQL 和参数
+function convertQuery(sql, params) {
+  let pgSql = sql;
+  let paramIndex = 0;
+  const newParams = [];
+  
+  // 将 ? 占位符转换为 $1, $2...
+  pgSql = pgSql.replace(/\?/g, () => {
+    const param = params[paramIndex];
+    paramIndex++;
+    newParams.push(param);
+    return `$${newParams.length}`;
+  });
+  
+  return { sql: pgSql, params: newParams };
+}
+
 // 包装器：使 PostgreSQL 接口兼容 SQLite 风格的回调
 const db = {
   run: (sql, params, callback) => {
-    // 将 SQLite 的 ? 占位符转换为 PostgreSQL 的 $1, $2...
-    let pgSql = sql;
-    let paramIndex = 0;
-    pgSql = pgSql.replace(/\?/g, () => `$${++paramIndex}`);
+    const converted = convertQuery(sql, params || []);
     
-    pool.query(pgSql, params, (err, result) => {
+    pool.query(converted.sql, converted.params, (err, result) => {
       if (callback) {
         if (err) {
+          console.error('SQL Error:', converted.sql, converted.params, err.message);
           callback.call({ lastID: null, changes: 0 }, err);
         } else {
-          callback.call({ 
-            lastID: result.rows[0]?.id || null, 
-            changes: result.rowCount 
+          callback.call({
+            lastID: result.rows[0]?.id || null,
+            changes: result.rowCount
           }, null);
         }
       }
@@ -38,24 +53,26 @@ const db = {
   },
   
   get: (sql, params, callback) => {
-    let pgSql = sql;
-    let paramIndex = 0;
-    pgSql = pgSql.replace(/\?/g, () => `$${++paramIndex}`);
+    const converted = convertQuery(sql, params || []);
     
-    pool.query(pgSql, params, (err, result) => {
+    pool.query(converted.sql, converted.params, (err, result) => {
       if (callback) {
+        if (err) {
+          console.error('SQL Error:', converted.sql, converted.params, err.message);
+        }
         callback(err, result?.rows[0] || null);
       }
     });
   },
   
   all: (sql, params, callback) => {
-    let pgSql = sql;
-    let paramIndex = 0;
-    pgSql = pgSql.replace(/\?/g, () => `$${++paramIndex}`);
+    const converted = convertQuery(sql, params || []);
     
-    pool.query(pgSql, params, (err, result) => {
+    pool.query(converted.sql, converted.params, (err, result) => {
       if (callback) {
+        if (err) {
+          console.error('SQL Error:', converted.sql, converted.params, err.message);
+        }
         callback(err, result?.rows || []);
       }
     });
