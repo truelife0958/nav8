@@ -43,10 +43,10 @@ router.post('/', auth, (req, res) => {
     return res.status(400).json({ error: '参数格式错误' });
   }
   
-  db.get('INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
-    [menu_id, sub_menu_id || null, title.trim(), url.trim(), logo_url || '', custom_logo_path || '', desc || '', order || 0], function(err, row) {
+  db.run('INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [menu_id, sub_menu_id || null, title.trim(), url.trim(), logo_url || '', custom_logo_path || '', desc || '', order || 0], function(err) {
     if (err) return res.status(500).json({error: '添加失败'});
-    res.json({ id: row?.id });
+    res.json({ id: this.lastID });
   });
 });
 
@@ -61,7 +61,7 @@ router.put('/:id', auth, (req, res) => {
     return res.status(400).json({ error: '参数格式错误' });
   }
   
-  db.run('UPDATE cards SET menu_id=?, sub_menu_id=?, title=?, url=?, logo_url=?, custom_logo_path=?, desc=?, "order"=? WHERE id=?',
+  db.run('UPDATE cards SET menu_id=?, sub_menu_id=?, title=?, url=?, logo_url=?, custom_logo_path=?, "desc"=?, "order"=? WHERE id=?',
     [menu_id, sub_menu_id || null, title.trim(), url.trim(), logo_url || '', custom_logo_path || '', desc || '', order || 0, req.params.id], function(err) {
     if (err) return res.status(500).json({error: err.message});
     res.json({ changed: this.changes });

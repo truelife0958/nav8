@@ -41,9 +41,9 @@ router.post('/', auth, (req, res) => {
     return res.status(400).json({ error: '广告位置只能是left或right' });
   }
   
-  db.get('INSERT INTO ads (position, img, url) VALUES (?, ?, ?) RETURNING id', [position, img, url], function(err, row) {
+  db.run('INSERT INTO ads (position, img, url) VALUES (?, ?, ?)', [position, img, url], function(err) {
     if (err) return res.status(500).json({error: '添加失败'});
-    res.json({ id: row?.id });
+    res.json({ id: this.lastID });
   });
 });
 // 修改广告

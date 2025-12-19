@@ -75,7 +75,7 @@ router.put('/password', authMiddleware, (req, res) => {
 router.get('/', authMiddleware, (req, res) => {
   const { page, pageSize } = req.query;
   if (!page && !pageSize) {
-    db.all('SELECT id, username FROM users', (err, users) => {
+    db.all('SELECT id, username FROM users', [], (err, users) => {
       if (err) {
         return res.status(500).json({ message: '服务器错误' });
       }
