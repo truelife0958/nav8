@@ -71,7 +71,7 @@ router.post('/', auth, upload.single('file'), (req, res) => {
   
   bookmarks.forEach((b, i) => {
     db.run(
-      'INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, desc, "order") VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?)',
       [Number(menu_id), sub_menu_id ? Number(sub_menu_id) : null, b.title, b.url, b.logo_url, b.desc, i],
       (err) => {
         if (!err) successCount++;

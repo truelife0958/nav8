@@ -41,9 +41,9 @@ router.post('/', auth, (req, res) => {
     return res.status(400).json({ error: '参数格式错误' });
   }
   
-  db.run('INSERT INTO friends (title, url, logo) VALUES (?, ?, ?)', [title.trim(), url.trim(), logo || ''], function(err) {
-    if (err) return res.status(500).json({error: err.message});
-    res.json({ id: this.lastID });
+  db.get('INSERT INTO friends (title, url, logo) VALUES (?, ?, ?) RETURNING id', [title.trim(), url.trim(), logo || ''], function(err, row) {
+    if (err) return res.status(500).json({error: '添加失败'});
+    res.json({ id: row?.id });
   });
 });
 // 修改友链

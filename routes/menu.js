@@ -70,9 +70,9 @@ router.post('/', auth, (req, res) => {
     return res.status(400).json({ error: '请填写菜单名称' });
   }
   
-  db.run('INSERT INTO menus (name, "order") VALUES (?, ?)', [name.trim(), order || 0], function(err) {
-    if (err) return res.status(500).json({error: err.message});
-    res.json({ id: this.lastID });
+  db.get('INSERT INTO menus (name, "order") VALUES (?, ?) RETURNING id', [name.trim(), order || 0], function(err, row) {
+    if (err) return res.status(500).json({error: '添加失败'});
+    res.json({ id: row?.id });
   });
 });
 
@@ -111,10 +111,10 @@ router.post('/:id/submenus', auth, (req, res) => {
     return res.status(400).json({ error: '请填写子菜单名称' });
   }
   
-  db.run('INSERT INTO sub_menus (parent_id, name, "order") VALUES (?, ?, ?)',
-    [req.params.id, name.trim(), order || 0], function(err) {
-    if (err) return res.status(500).json({error: err.message});
-    res.json({ id: this.lastID });
+  db.get('INSERT INTO sub_menus (parent_id, name, "order") VALUES (?, ?, ?) RETURNING id',
+    [req.params.id, name.trim(), order || 0], function(err, row) {
+    if (err) return res.status(500).json({error: '添加失败'});
+    res.json({ id: row?.id });
   });
 });
 
