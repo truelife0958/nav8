@@ -90,9 +90,16 @@ router.put('/:id', auth, (req, res) => {
 });
 
 router.delete('/:id', auth, (req, res) => {
-  db.run('DELETE FROM menus WHERE id=?', [req.params.id], function(err) {
-    if (err) return res.status(500).json({error: err.message});
-    res.json({ deleted: this.changes });
+  const menuId = req.params.id;
+  // 先删除关联的卡片和子菜单
+  db.serialize(() => {
+    db.run('DELETE FROM cards WHERE menu_id = ?', [menuId]);
+    db.run('DELETE FROM cards WHERE sub_menu_id IN (SELECT id FROM sub_menus WHERE parent_id = ?)', [menuId]);
+    db.run('DELETE FROM sub_menus WHERE parent_id = ?', [menuId]);
+    db.run('DELETE FROM menus WHERE id = ?', [menuId], function(err) {
+      if (err) return res.status(500).json({ error: '删除失败' });
+      res.json({ deleted: this.changes });
+    });
   });
 });
 
@@ -125,9 +132,14 @@ router.put('/submenus/:id', auth, (req, res) => {
 });
 
 router.delete('/submenus/:id', auth, (req, res) => {
-  db.run('DELETE FROM sub_menus WHERE id=?', [req.params.id], function(err) {
-    if (err) return res.status(500).json({error: err.message});
-    res.json({ deleted: this.changes });
+  const subMenuId = req.params.id;
+  // 先删除关联的卡片
+  db.serialize(() => {
+    db.run('DELETE FROM cards WHERE sub_menu_id = ?', [subMenuId]);
+    db.run('DELETE FROM sub_menus WHERE id = ?', [subMenuId], function(err) {
+      if (err) return res.status(500).json({ error: '删除失败' });
+      res.json({ deleted: this.changes });
+    });
   });
 });
 

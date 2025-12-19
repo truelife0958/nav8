@@ -12,6 +12,9 @@ if (!fs.existsSync(dbDir)) {
 const db = new sqlite3.Database(path.join(dbDir, 'nav.db'));
 
 db.serialize(() => {
+  // 启用外键约束
+  db.run('PRAGMA foreign_keys = ON');
+  
   db.run(`CREATE TABLE IF NOT EXISTS menus (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,

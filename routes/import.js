@@ -45,7 +45,9 @@ router.post('/', auth, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: '请上传文件' });
   
   const { menu_id, sub_menu_id } = req.body;
-  if (!menu_id) return res.status(400).json({ error: '请选择目标菜单' });
+  if (!menu_id || !Number.isInteger(Number(menu_id))) {
+    return res.status(400).json({ error: '请选择有效的目标菜单' });
+  }
   
   const content = req.file.buffer.toString('utf-8');
   let bookmarks = [];
@@ -62,17 +64,23 @@ router.post('/', auth, upload.single('file'), (req, res) => {
   
   if (!bookmarks.length) return res.status(400).json({ error: '未找到有效书签' });
   
-  const stmt = db.prepare('INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, desc, "order") VALUES (?, ?, ?, ?, ?, ?, ?)');
-  let count = 0;
+  // 使用 Promise 确保所有插入完成后再返回
+  let successCount = 0;
+  let completed = 0;
+  const total = bookmarks.length;
   
   bookmarks.forEach((b, i) => {
-    stmt.run(menu_id, sub_menu_id || null, b.title, b.url, b.logo_url, b.desc, i, (err) => {
-      if (!err) count++;
-    });
-  });
-  
-  stmt.finalize(() => {
-    res.json({ imported: count, total: bookmarks.length });
+    db.run(
+      'INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, desc, "order") VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [Number(menu_id), sub_menu_id ? Number(sub_menu_id) : null, b.title, b.url, b.logo_url, b.desc, i],
+      (err) => {
+        if (!err) successCount++;
+        completed++;
+        if (completed === total) {
+          res.json({ imported: successCount, total });
+        }
+      }
+    );
   });
 });
 

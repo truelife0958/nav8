@@ -81,9 +81,14 @@ router.post('/batch/delete', auth, (req, res) => {
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: '请选择要删除的卡片' });
   }
-  const placeholders = ids.map(() => '?').join(',');
-  db.run(`DELETE FROM cards WHERE id IN (${placeholders})`, ids, function(err) {
-    if (err) return res.status(500).json({ error: err.message });
+  // 验证 ids 都是有效的数字
+  const validIds = ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0).map(Number);
+  if (validIds.length === 0) {
+    return res.status(400).json({ error: '无效的卡片ID' });
+  }
+  const placeholders = validIds.map(() => '?').join(',');
+  db.run(`DELETE FROM cards WHERE id IN (${placeholders})`, validIds, function(err) {
+    if (err) return res.status(500).json({ error: '删除失败' });
     res.json({ deleted: this.changes });
   });
 });
@@ -94,13 +99,18 @@ router.post('/batch/move', auth, (req, res) => {
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: '请选择要移动的卡片' });
   }
-  if (!menu_id) {
-    return res.status(400).json({ error: '请选择目标菜单' });
+  if (!menu_id || !Number.isInteger(Number(menu_id))) {
+    return res.status(400).json({ error: '请选择有效的目标菜单' });
   }
-  const placeholders = ids.map(() => '?').join(',');
+  // 验证 ids 都是有效的数字
+  const validIds = ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0).map(Number);
+  if (validIds.length === 0) {
+    return res.status(400).json({ error: '无效的卡片ID' });
+  }
+  const placeholders = validIds.map(() => '?').join(',');
   db.run(`UPDATE cards SET menu_id = ?, sub_menu_id = ? WHERE id IN (${placeholders})`,
-    [menu_id, sub_menu_id || null, ...ids], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
+    [Number(menu_id), sub_menu_id ? Number(sub_menu_id) : null, ...validIds], function(err) {
+    if (err) return res.status(500).json({ error: '移动失败' });
     res.json({ moved: this.changes });
   });
 });
