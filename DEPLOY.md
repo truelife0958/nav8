@@ -131,7 +131,7 @@ docker-compose up -d
 
 ### 环境要求
 
-- Node.js >= 18
+- Node.js **18/20/22 LTS**（不要使用 23/24/25 这类非 LTS，可能导致 `sqlite3`/`bcrypt` 原生模块无法加载）
 - npm >= 8
 
 ### 1. 克隆项目

@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('./utils/bcrypt');
 const config = require('./config');
 
 // 检测数据库类型
@@ -36,18 +36,29 @@ if (usePostgres) {
   // PostgreSQL 包装器
   db = {
     run: (sql, params, callback) => {
-      const converted = convertQuery(sql, params || []);
-      
+      // 兼容 sqlite3 的 callback 语义：INSERT 时通过 this.lastID 返回自增 id
+      // PostgreSQL 下如果原 SQL 没有 RETURNING，则自动追加 RETURNING id
+      const shouldReturnId =
+        typeof callback === 'function' &&
+        /^\s*insert\s+into\s+/i.test(sql) &&
+        !/\breturning\b/i.test(sql);
+
+      const sqlWithReturning = shouldReturnId ? `${sql} RETURNING id` : sql;
+      const converted = convertQuery(sqlWithReturning, params || []);
+
       pool.query(converted.sql, converted.params, (err, result) => {
         if (callback) {
           if (err) {
             console.error('SQL Error:', converted.sql, converted.params, err.message);
             callback.call({ lastID: null, changes: 0 }, err);
           } else {
-            callback.call({
-              lastID: result.rows[0]?.id || null,
-              changes: result.rowCount
-            }, null);
+            callback.call(
+              {
+                lastID: result?.rows?.[0]?.id ?? null,
+                changes: result?.rowCount ?? 0
+              },
+              null
+            );
           }
         }
       });
@@ -226,7 +237,7 @@ if (usePostgres) {
   
 } else {
   // SQLite 模式
-  const sqlite3 = require('sqlite3').verbose();
+  const sqlite3 = require('./utils/sqlite3')();
   const path = require('path');
   const fs = require('fs');
   
