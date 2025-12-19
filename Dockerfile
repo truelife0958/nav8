@@ -27,6 +27,8 @@ RUN npm install
 
 COPY app.js config.js db.js ./
 COPY routes/ ./routes/
+COPY scripts/ ./scripts/
+COPY utils/ ./utils/
 
 COPY --from=frontend-builder /app/dist ./web/dist
 
