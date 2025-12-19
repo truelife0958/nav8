@@ -13,7 +13,7 @@ if (usePostgres) {
   
   const pool = new Pool({
     connectionString,
-    ssl: false  // Zeabur 内部网络不需要 SSL
+    ssl: process.env.POSTGRES_SSL === 'true' ? { rejectUnauthorized: false } : false
   });
   
   // 转换 SQL 和参数
