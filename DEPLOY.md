@@ -2,7 +2,8 @@
 
 ## 目录
 
-- [Docker 部署（推荐）](#docker-部署推荐)
+- [Zeabur 部署（推荐）](#zeabur-部署推荐)
+- [Docker 部署](#docker-部署)
 - [Docker Compose 部署](#docker-compose-部署)
 - [源码部署](#源码部署)
 - [反向代理配置](#反向代理配置)
@@ -12,7 +13,47 @@
 
 ---
 
-## Docker 部署（推荐）
+## Zeabur 部署（推荐）
+
+Zeabur 是一个简单易用的 PaaS 平台，支持一键部署。
+
+### 1. 创建项目
+
+1. 登录 [Zeabur](https://zeabur.com)
+2. 创建新项目
+
+### 2. 部署 PostgreSQL
+
+1. 在项目中点击「Add Service」→「Marketplace」
+2. 选择「PostgreSQL」
+3. 等待部署完成
+
+### 3. 部署 Nav8
+
+1. 点击「Add Service」→「Git」
+2. 选择你 fork 的 nav8 仓库
+3. 等待构建完成
+
+### 4. 配置环境变量
+
+在 Nav8 服务的 Variables 中添加：
+
+| 变量名 | 值 | 说明 |
+|--------|-----|------|
+| `DATABASE_URL` | `${POSTGRES_URI}` | **必须使用变量引用** |
+| `ADMIN_USERNAME` | `admin` | 管理员用户名 |
+| `ADMIN_PASSWORD` | `your_password` | 管理员密码 |
+
+> ⚠️ **重要**：`DATABASE_URL` 必须使用 `${POSTGRES_URI}` 变量引用，不要直接粘贴连接字符串！直接粘贴会导致 `ECONNRESET` 错误。
+
+### 5. 绑定域名
+
+1. 点击 Nav8 服务的「Networking」
+2. 添加自定义域名或使用 Zeabur 提供的免费域名
+
+---
+
+## Docker 部署
 
 ### 快速启动
 
@@ -34,6 +75,7 @@ docker run -d \
 | `PORT` | 服务端口 | `3000` |
 | `ADMIN_USERNAME` | 管理员用户名 | `admin` |
 | `ADMIN_PASSWORD` | 管理员密码 | `123456` |
+| `DATABASE_URL` | PostgreSQL 连接字符串（可选，默认使用 SQLite） | - |
 
 ### 数据持久化
 
@@ -326,7 +368,7 @@ pm2 logs nav8
 
 - **前端**: Vue 3 + Vite
 - **后端**: Node.js + Express
-- **数据库**: SQLite
+- **数据库**: SQLite / PostgreSQL
 - **容器**: Docker
 
 ## 许可证
