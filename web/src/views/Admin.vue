@@ -84,7 +84,7 @@
         <UserManage v-if="page==='user'" />
       </div>
       <footer class="admin-footer">
-        <p class="admin-copyright">Copyright © 2025 Nav-Item | <a href="https://github.com/eooce/Nav-Item" target="_blank" class="footer-link">Powered by eooce</a></p>
+        <p class="admin-copyright">Copyright © 2025 Nav8 | <a href="https://github.com/truelife0958/nav8" target="_blank" class="footer-link">Powered by truelife0958</a></p>
       </footer>
     </main>
   </div>

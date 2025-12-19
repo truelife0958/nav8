@@ -1,9 +1,9 @@
 {
-  "name": "nav-item-frontend",
+  "name": "nav8-frontend",
   "version": "1.0.0",
-  "author": "eooce",
-  "description": "nav-item-frontend",
-  "repository": "https://github.com/eooce/nav-item",
+  "author": "truelife0958",
+  "description": "nav8-frontend",
+  "repository": "https://github.com/truelife0958/nav8",
   "license": "MIT",
   "scripts": {
     "dev": "vite --host",
