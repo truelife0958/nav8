@@ -2,7 +2,8 @@
 
 ## 目录
 
-- [Zeabur 部署（推荐）](#zeabur-部署推荐)
+- [Koyeb 部署（免费 Docker，推荐）](#koyeb-部署免费-docker推荐)
+- [Fly.io 部署（免费额度 Docker，可选）](#flyio-部署免费额度-docker可选)
 - [Docker 部署](#docker-部署)
 - [Docker Compose 部署](#docker-compose-部署)
 - [源码部署](#源码部署)
@@ -10,46 +11,61 @@
 - [数据备份与恢复](#数据备份与恢复)
 - [功能说明](#功能说明)
 - [常见问题](#常见问题)
+- [Zeabur（已弃用）](#zeabur已弃用)
 
 ---
 
-## Zeabur 部署（推荐）
+## Koyeb 部署（免费 Docker，推荐）
 
-Zeabur 是一个简单易用的 PaaS 平台，支持一键部署。
+Koyeb 支持直接从镜像仓库拉取 Docker 镜像部署，适合替代 Zeabur 这类 PaaS。
 
-### 1. 创建项目
+### 0. 重要说明（数据库与持久化）
 
-1. 登录 [Zeabur](https://zeabur.com)
-2. 创建新项目
+- 大多数免费 PaaS 的容器文件系统是 **临时的**，重启/迁移可能丢失 `SQLite` 数据文件。
+- 生产/长期使用建议：使用 **托管 PostgreSQL（Neon / Supabase / Render Postgres 等）**，并设置 `DATABASE_URL`。
 
-### 2. 部署 PostgreSQL
+### 1. 准备镜像
 
-1. 在项目中点击「Add Service」→「Marketplace」
-2. 选择「PostgreSQL」
-3. 等待部署完成
+使用已发布的镜像：
 
-### 3. 部署 Nav8
+- `ghcr.io/truelife0958/nav8:latest`
 
-1. 点击「Add Service」→「Git」
-2. 选择你 fork 的 nav8 仓库
-3. 等待构建完成
+### 2. 创建 Service
 
-### 4. 配置环境变量
+1. 登录 Koyeb
+2. Create App → **Docker**
+3. Image：填写 `ghcr.io/truelife0958/nav8:latest`
+4. Exposed port：`3000`
 
-在 Nav8 服务的 Variables 中添加：
+### 3. 配置环境变量
 
 | 变量名 | 值 | 说明 |
 |--------|-----|------|
-| `DATABASE_URL` | `${POSTGRES_URI}` | **必须使用变量引用** |
+| `PORT` | `3000` | 端口（与 Koyeb 暴露端口一致） |
 | `ADMIN_USERNAME` | `admin` | 管理员用户名 |
 | `ADMIN_PASSWORD` | `your_password` | 管理员密码 |
+| `DATABASE_URL` | `postgres://...` | **推荐**：使用外部 PostgreSQL |
+| `POSTGRES_SSL` | `true` 或 `false` | 需要 SSL 时设为 `true` |
 
-> ⚠️ **重要**：`DATABASE_URL` 必须使用 `${POSTGRES_URI}` 变量引用，不要直接粘贴连接字符串！直接粘贴会导致 `ECONNRESET` 错误。
+### 4. 绑定域名
 
-### 5. 绑定域名
+在 Koyeb 的 Domains 中绑定域名，或使用其提供的默认域名。
 
-1. 点击 Nav8 服务的「Networking」
-2. 添加自定义域名或使用 Zeabur 提供的免费域名
+---
+
+## Fly.io 部署（免费额度 Docker，可选）
+
+Fly.io 支持 Dockerfile/镜像部署，有一定免费额度（可能需要绑定支付方式，视其政策而定）。
+
+### 1. 创建应用
+
+- 按 Fly.io 官方流程安装 `flyctl` 并登录
+- 选择从镜像或 Dockerfile 部署
+
+### 2. 关键配置要点
+
+- 应用监听端口需与平台分配一致：建议保持应用内部 `PORT=3000`
+- 强烈建议使用外部 PostgreSQL（原因同上）
 
 ---
 
@@ -355,6 +371,18 @@ pm2 logs nav8
 2. 备份当前数据库文件
 3. 删除 `database/nav.db`
 4. 重启服务（会自动创建新数据库）
+
+---
+
+## Zeabur（已弃用）
+
+Zeabur 部署在本项目中曾遇到连接/健康检查相关问题，当前不再作为推荐方案。
+
+如仍需使用 Zeabur，可参考历史配置要点：
+
+| 变量名 | 值 | 说明 |
+|--------|-----|------|
+| `DATABASE_URL` | `${POSTGRES_URI}` | Zeabur 内置 Postgres 变量引用 |
 
 ---
 
