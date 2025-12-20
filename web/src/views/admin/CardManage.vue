@@ -376,16 +376,17 @@ async function updateCard(card) {
   try {
     await apiUpdateCard(card.id, {
       menu_id: card.menu_id || selectedMenuId.value,
-      sub_menu_id: card.sub_menu_id,
+      sub_menu_id: card.sub_menu_id !== undefined ? card.sub_menu_id : (selectedSubMenuId.value || null),
       title: card.title,
       url: card.url,
       logo_url: card.logo_url,
       desc: card.desc,
       order: card.order
     });
-    loadCards();
+    showToast('更新成功', 'success');
   } catch (error) {
     showToast('更新卡片失败: ' + getErrorMessage(error), 'error');
+    loadCards(); // 更新失败时重新加载恢复数据
   }
 }
 

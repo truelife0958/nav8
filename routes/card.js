@@ -68,9 +68,13 @@ router.post('/', auth, (req, res) => {
     function(err) {
       if (err) {
         console.error('添加卡片失败:', err);
-        return res.status(500).json({ error: '添加失败' });
+        // 检查是否是唯一约束冲突
+        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate'))) {
+          return res.status(409).json({ error: '该分类下已存在相同URL的卡片' });
+        }
+        return res.status(500).json({ error: '添加失败: ' + (err.message || '未知错误') });
       }
-      res.json({ id: this.lastID });
+      res.json({ id: this.lastID, success: true });
     }
   );
 });
@@ -95,12 +99,16 @@ router.put('/:id', auth, (req, res) => {
     function(err) {
       if (err) {
         console.error('更新卡片失败:', err);
-        return res.status(500).json({ error: '更新失败' });
+        // 检查是否是唯一约束冲突
+        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate'))) {
+          return res.status(409).json({ error: '该分类下已存在相同URL的卡片' });
+        }
+        return res.status(500).json({ error: '更新失败: ' + (err.message || '未知错误') });
       }
       if (this.changes === 0) {
         return res.status(404).json({ error: '卡片不存在' });
       }
-      res.json({ changed: this.changes });
+      res.json({ changed: this.changes, success: true });
     }
   );
 });
@@ -160,9 +168,13 @@ router.post('/batch/move', auth, (req, res) => {
     function(err) {
       if (err) {
         console.error('批量移动卡片失败:', err);
-        return res.status(500).json({ error: '移动失败' });
+        // 检查是否是唯一约束冲突
+        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate'))) {
+          return res.status(409).json({ error: '目标分类下已存在相同URL的卡片，无法移动' });
+        }
+        return res.status(500).json({ error: '移动失败: ' + (err.message || '未知错误') });
       }
-      res.json({ moved: this.changes });
+      res.json({ moved: this.changes, success: true });
     }
   );
 });
