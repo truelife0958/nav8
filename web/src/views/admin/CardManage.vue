@@ -352,19 +352,28 @@ async function handleImport() {
     showToast('请选择目标菜单', 'warning');
     return;
   }
-  
+
   importing.value = true;
   try {
-    const res = await importBookmarks(importFile.value, importMenuId.value, importSubMenuId.value || null);
+    const targetMenuId = importMenuId.value;
+    const targetSubMenuId = importSubMenuId.value || '';
+
+    const res = await importBookmarks(importFile.value, targetMenuId, targetSubMenuId || null);
     showToast(`成功导入 ${res.data.imported}/${res.data.total} 个书签`, 'success');
+
     showImportModal.value = false;
     importFile.value = null;
     importFileName.value = '';
     if (importFileInput.value) importFileInput.value.value = '';
-    // 如果导入到当前菜单，刷新列表
-    if (importMenuId.value === selectedMenuId.value) {
-      loadCards();
+
+    // 导入完成后自动切换到目标菜单/子菜单并刷新
+    if (selectedMenuId.value !== targetMenuId) {
+      selectedMenuId.value = targetMenuId;
     }
+    if (selectedSubMenuId.value !== targetSubMenuId) {
+      selectedSubMenuId.value = targetSubMenuId;
+    }
+    await loadCards();
   } catch (error) {
     showToast('导入失败: ' + (error.response?.data?.error || error.message), 'error');
   } finally {
