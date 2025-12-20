@@ -22,7 +22,11 @@ router.get('/:menuId', (req, res) => {
     if (err) return res.status(500).json({error: err.message});
     rows.forEach(card => {
       if (!card.custom_logo_path) {
-        card.display_logo = card.logo_url || (card.url.replace(/\/+$/, '') + '/favicon.ico');
+        try {
+          card.display_logo = card.logo_url || (card.url ? card.url.replace(/\/+$/, '') + '/favicon.ico' : '/default-favicon.png');
+        } catch {
+          card.display_logo = '/default-favicon.png';
+        }
       } else {
         card.display_logo = '/uploads/' + card.custom_logo_path;
       }

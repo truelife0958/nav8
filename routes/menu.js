@@ -91,16 +91,45 @@ router.put('/:id', auth, (req, res) => {
 
 router.delete('/:id', auth, (req, res) => {
   const menuId = req.params.id;
-  // 先删除关联的卡片和子菜单
-  db.serialize(() => {
-    db.run('DELETE FROM cards WHERE menu_id = ?', [menuId]);
-    db.run('DELETE FROM cards WHERE sub_menu_id IN (SELECT id FROM sub_menus WHERE parent_id = ?)', [menuId]);
-    db.run('DELETE FROM sub_menus WHERE parent_id = ?', [menuId]);
-    db.run('DELETE FROM menus WHERE id = ?', [menuId], function(err) {
-      if (err) return res.status(500).json({ error: '删除失败' });
-      res.json({ deleted: this.changes });
+  
+  // 使用Promise链确保顺序执行
+  const deleteCards = () => new Promise((resolve, reject) => {
+    db.run('DELETE FROM cards WHERE menu_id = ?', [menuId], (err) => {
+      if (err) reject(err);
+      else resolve();
     });
   });
+  
+  const deleteSubMenuCards = () => new Promise((resolve, reject) => {
+    db.run('DELETE FROM cards WHERE sub_menu_id IN (SELECT id FROM sub_menus WHERE parent_id = ?)', [menuId], (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+  
+  const deleteSubMenus = () => new Promise((resolve, reject) => {
+    db.run('DELETE FROM sub_menus WHERE parent_id = ?', [menuId], (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+  
+  const deleteMenu = () => new Promise((resolve, reject) => {
+    db.run('DELETE FROM menus WHERE id = ?', [menuId], function(err) {
+      if (err) reject(err);
+      else resolve(this.changes);
+    });
+  });
+  
+  deleteCards()
+    .then(deleteSubMenuCards)
+    .then(deleteSubMenus)
+    .then(deleteMenu)
+    .then(changes => res.json({ deleted: changes }))
+    .catch(err => {
+      console.error('删除菜单失败:', err);
+      res.status(500).json({ error: '删除失败' });
+    });
 });
 
 // 子菜单相关API
@@ -133,13 +162,24 @@ router.put('/submenus/:id', auth, (req, res) => {
 
 router.delete('/submenus/:id', auth, (req, res) => {
   const subMenuId = req.params.id;
-  // 先删除关联的卡片
-  db.serialize(() => {
-    db.run('DELETE FROM cards WHERE sub_menu_id = ?', [subMenuId]);
-    db.run('DELETE FROM sub_menus WHERE id = ?', [subMenuId], function(err) {
-      if (err) return res.status(500).json({ error: '删除失败' });
-      res.json({ deleted: this.changes });
+  
+  // 先删除关联的卡片，再删除子菜单
+  new Promise((resolve, reject) => {
+    db.run('DELETE FROM cards WHERE sub_menu_id = ?', [subMenuId], (err) => {
+      if (err) reject(err);
+      else resolve();
     });
+  })
+  .then(() => new Promise((resolve, reject) => {
+    db.run('DELETE FROM sub_menus WHERE id = ?', [subMenuId], function(err) {
+      if (err) reject(err);
+      else resolve(this.changes);
+    });
+  }))
+  .then(changes => res.json({ deleted: changes }))
+  .catch(err => {
+    console.error('删除子菜单失败:', err);
+    res.status(500).json({ error: '删除失败' });
   });
 });
 

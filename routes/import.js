@@ -59,15 +59,25 @@ router.post('/', auth, upload.single('file'), (req, res) => {
       bookmarks = parseBookmarkHtml(content);
     }
   } catch (e) {
-    return res.status(400).json({ error: '文件解析失败' });
+    return res.status(400).json({ error: '文件解析失败: ' + e.message });
   }
   
   if (!bookmarks.length) return res.status(400).json({ error: '未找到有效书签' });
   
   // 使用 Promise 确保所有插入完成后再返回
   let successCount = 0;
+  let errorCount = 0;
   let completed = 0;
   const total = bookmarks.length;
+  let responseSent = false;
+  
+  // 设置超时保护
+  const timeout = setTimeout(() => {
+    if (!responseSent) {
+      responseSent = true;
+      res.json({ imported: successCount, total, timeout: true });
+    }
+  }, 30000);
   
   bookmarks.forEach((b, i) => {
     db.run(
@@ -75,9 +85,12 @@ router.post('/', auth, upload.single('file'), (req, res) => {
       [Number(menu_id), sub_menu_id ? Number(sub_menu_id) : null, b.title, b.url, b.logo_url, b.desc, i],
       (err) => {
         if (!err) successCount++;
+        else errorCount++;
         completed++;
-        if (completed === total) {
-          res.json({ imported: successCount, total });
+        if (completed === total && !responseSent) {
+          responseSent = true;
+          clearTimeout(timeout);
+          res.json({ imported: successCount, total, errors: errorCount });
         }
       }
     );

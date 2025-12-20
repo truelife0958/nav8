@@ -7,12 +7,23 @@ const api = axios.create({
   timeout: 10000
 });
 
+// 请求拦截器 - 自动添加token
+api.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  error => Promise.reject(error)
+);
+
 // 响应拦截器 - 处理token过期
 api.interceptors.response.use(
   response => response,
   error => {
     if (error.response?.status === 401) {
-      // Token过期或无效，清除本地存储并跳转到登录
       const currentPath = window.location.pathname;
       if (currentPath.startsWith('/admin')) {
         localStorage.removeItem('token');
@@ -84,3 +95,7 @@ export const importBookmarks = (file, menuId, subMenuId) => {
   if (subMenuId) formData.append('sub_menu_id', subMenuId);
   return api.post('/import', formData, { headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' } });
 };
+
+// 备份API
+export const exportBackup = () => api.get('/backup/export', { headers: authHeaders(), responseType: 'blob' });
+export const importBackup = (data, overwrite = false) => api.post('/backup/import', { data, overwrite }, { headers: authHeaders() });

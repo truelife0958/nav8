@@ -123,10 +123,12 @@ function getLogo(card) {
   if (card.custom_logo_path) return '/uploads/' + card.custom_logo_path;
   if (card.logo_url) return card.logo_url;
   // 默认 favicon
+  if (!card.url) return '/default-favicon.png';
   try {
     const url = new URL(card.url);
     return url.origin + '/favicon.ico';
-  } catch {
+  } catch (e) {
+    console.warn('无法解析URL:', card.url, e);
     return '/default-favicon.png';
   }
 }

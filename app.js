@@ -10,6 +10,7 @@ const adRoutes = require('./routes/ad');
 const friendRoutes = require('./routes/friend');
 const userRoutes = require('./routes/user');
 const importRoutes = require('./routes/import');
+const backupRoutes = require('./routes/backup');
 const compression = require('compression');
 const app = express();
 
@@ -65,6 +66,7 @@ app.use('/api/ads', adRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/backup', backupRoutes);
 
 // SPA路由处理 - 所有非API和非静态文件请求返回index.html
 app.get('*', (req, res, next) => {
@@ -75,15 +77,15 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(__dirname, 'web/dist', 'index.html'));
 });
 
+// 404处理 - 必须在错误处理之前
+app.use((req, res, next) => {
+  res.status(404).json({ error: '接口不存在' });
+});
+
 // 全局错误处理中间件
 app.use((err, req, res, next) => {
   console.error('服务器错误:', err);
   res.status(500).json({ error: '服务器内部错误', message: err.message });
-});
-
-// 404处理
-app.use((req, res) => {
-  res.status(404).json({ error: '接口不存在' });
 });
 
 app.listen(PORT, () => {

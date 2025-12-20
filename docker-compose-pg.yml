@@ -1,0 +1,38 @@
+version: '3'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nav8-postgres
+    environment:
+      - POSTGRES_USER=nav8
+      - POSTGRES_PASSWORD=nav8password
+      - POSTGRES_DB=nav8
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nav8"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  nav8:
+    image: ghcr.io/truelife0958/nav8:latest
+    container_name: nav8
+    ports:
+      - "3000:3000"
+    environment:
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=123456
+      - DATABASE_URL=postgresql://nav8:nav8password@postgres:5432/nav8
+      - JWT_SECRET=your-secure-jwt-secret-change-in-production
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
