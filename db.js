@@ -173,17 +173,27 @@ if (usePostgres) {
       `);
       
       // 确保users表有last_login_time和last_login_ip列（兼容旧表）
-      await pool.query(`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_login_time') THEN
-            ALTER TABLE users ADD COLUMN last_login_time TEXT;
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_login_ip') THEN
-            ALTER TABLE users ADD COLUMN last_login_ip TEXT;
-          END IF;
-        END $$;
+      const colCheck = await pool.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='users' AND column_name IN ('last_login_time', 'last_login_ip')
       `);
+      const existingCols = colCheck.rows.map(r => r.column_name);
+      
+      if (!existingCols.includes('last_login_time')) {
+        await pool.query('ALTER TABLE users ADD COLUMN last_login_time TEXT');
+        console.log('已添加 last_login_time 列');
+      }
+      if (!existingCols.includes('last_login_ip')) {
+        await pool.query('ALTER TABLE users ADD COLUMN last_login_ip TEXT');
+        console.log('已添加 last_login_ip 列');
+      }
+      
+      // 清除prepared statement缓存（通过DISCARD ALL）
+      try {
+        await pool.query('DISCARD ALL');
+      } catch (e) {
+        // 忽略DISCARD错误
+      }
       
       await pool.query(`
         CREATE TABLE IF NOT EXISTS ads (
