@@ -15,22 +15,58 @@ if (usePostgres) {
   // Zeabur内部PostgreSQL不需要SSL
   const useSSL = process.env.POSTGRES_SSL === 'true';
 
-  // 一些托管 Postgres / 连接池代理（如 PgBouncer 事务池）会导致 prepared statement 异常。
-  // 默认使用 simple query 协议以提升兼容性；如需 extended 协议可设置 PG_QUERY_MODE=extended。
+  // 一些托管 Postgres / 连接池代理（如 PgBouncer 事务池、PgCat）会导致 prepared statement 异常。
+  // 兼容性优先：默认改用“纯文本 SQL”（把参数安全转义后内联到 SQL）来避免协议级 prepared statement。
+  // 如需恢复参数化（extended 协议），可设置 PG_QUERY_MODE=extended。
   const pgQueryModeEnv = (process.env.PG_QUERY_MODE || 'simple').toLowerCase();
-  const pgQueryMode = pgQueryModeEnv === 'extended' ? undefined : 'simple';
+  const useExtendedProtocol = pgQueryModeEnv === 'extended';
 
   const pool = new Pool({
     connectionString,
     ssl: useSSL ? { rejectUnauthorized: false } : false
   });
 
-  function poolQuery(sql, params = []) {
-    return pool.query({
-      text: sql,
-      values: params,
-      queryMode: pgQueryMode
+  function toPgLiteral(value) {
+    if (value === null || value === undefined) return 'NULL';
+
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) throw new Error('Invalid number parameter');
+      return String(value);
+    }
+
+    if (typeof value === 'bigint') return value.toString();
+
+    if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+
+    if (value instanceof Date) {
+      return `'${value.toISOString().replace(/'/g, "''")}'`;
+    }
+
+    if (Buffer.isBuffer(value)) {
+      return `'\\x${value.toString('hex')}'`;
+    }
+
+    if (typeof value === 'object') {
+      const json = JSON.stringify(value);
+      return `'${String(json).replace(/'/g, "''")}'::jsonb`;
+    }
+
+    return `'${String(value).replace(/'/g, "''")}'`;
+  }
+
+  function interpolatePgParams(sql, params = []) {
+    return sql.replace(/\$(\d+)/g, (match, indexStr) => {
+      const index = Number(indexStr) - 1;
+      return toPgLiteral(params[index]);
     });
+  }
+
+  function poolQuery(sql, params = []) {
+    if (useExtendedProtocol) {
+      return pool.query({ text: sql, values: params });
+    }
+
+    return pool.query(interpolatePgParams(sql, params));
   }
   
   // 转换 SQL 和参数
@@ -63,7 +99,15 @@ if (usePostgres) {
       const sqlWithReturning = shouldReturnId ? `${sql} RETURNING id` : sql;
       const converted = convertQuery(sqlWithReturning, params || []);
 
-      pool.query({ text: converted.sql, values: converted.params, queryMode: pgQueryMode }, (err, result) => {
+      const queryText = useExtendedProtocol
+        ? null
+        : interpolatePgParams(converted.sql, converted.params);
+
+      const queryConfig = useExtendedProtocol
+        ? { text: converted.sql, values: converted.params }
+        : queryText;
+
+      pool.query(queryConfig, (err, result) => {
         if (callback) {
           if (err) {
             console.error('SQL Error:', converted.sql, converted.params, err.message);
@@ -83,8 +127,16 @@ if (usePostgres) {
     
     get: (sql, params, callback) => {
       const converted = convertQuery(sql, params || []);
-      
-      pool.query({ text: converted.sql, values: converted.params, queryMode: pgQueryMode }, (err, result) => {
+
+      const queryText = useExtendedProtocol
+        ? null
+        : interpolatePgParams(converted.sql, converted.params);
+
+      const queryConfig = useExtendedProtocol
+        ? { text: converted.sql, values: converted.params }
+        : queryText;
+
+      pool.query(queryConfig, (err, result) => {
         if (callback) {
           if (err) {
             console.error('SQL Error:', converted.sql, converted.params, err.message);
@@ -96,8 +148,16 @@ if (usePostgres) {
     
     all: (sql, params, callback) => {
       const converted = convertQuery(sql, params || []);
-      
-      pool.query({ text: converted.sql, values: converted.params, queryMode: pgQueryMode }, (err, result) => {
+
+      const queryText = useExtendedProtocol
+        ? null
+        : interpolatePgParams(converted.sql, converted.params);
+
+      const queryConfig = useExtendedProtocol
+        ? { text: converted.sql, values: converted.params }
+        : queryText;
+
+      pool.query(queryConfig, (err, result) => {
         if (callback) {
           if (err) {
             console.error('SQL Error:', converted.sql, converted.params, err.message);
