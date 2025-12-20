@@ -11,23 +11,13 @@ if (usePostgres) {
   // PostgreSQL 模式
   const { Pool } = require('pg');
   
-  // 自动检测是否需要SSL（云服务通常需要SSL）
-  const isCloudDB = connectionString && (
-    connectionString.includes('zeabur') ||
-    connectionString.includes('neon') ||
-    connectionString.includes('supabase') ||
-    connectionString.includes('railway') ||
-    connectionString.includes('render') ||
-    connectionString.includes('heroku') ||
-    connectionString.includes('aws') ||
-    connectionString.includes('azure') ||
-    connectionString.includes('digitalocean') ||
-    process.env.POSTGRES_SSL !== 'false'  // 默认启用SSL，除非明确禁用
-  );
+  // SSL配置：只有明确设置 POSTGRES_SSL=true 时才启用SSL
+  // Zeabur内部PostgreSQL不需要SSL
+  const useSSL = process.env.POSTGRES_SSL === 'true';
   
   const pool = new Pool({
     connectionString,
-    ssl: isCloudDB ? { rejectUnauthorized: false } : false
+    ssl: useSSL ? { rejectUnauthorized: false } : false
   });
   
   // 转换 SQL 和参数
