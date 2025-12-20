@@ -26,8 +26,11 @@ if (usePostgres) {
     ssl: useSSL ? { rejectUnauthorized: false } : false
   });
 
+  console.log(`PostgreSQL 查询模式: ${useExtendedProtocol ? 'extended(参数化)' : 'text(内联参数)'}`);
+
   function toPgLiteral(value) {
-    if (value === null || value === undefined) return 'NULL';
+    if (value === undefined) throw new Error('Missing query parameter (undefined)');
+    if (value === null) return 'NULL';
 
     if (typeof value === 'number') {
       if (!Number.isFinite(value)) throw new Error('Invalid number parameter');
@@ -74,7 +77,7 @@ if (usePostgres) {
     let pgSql = sql;
     let paramIndex = 0;
     const newParams = [];
-    
+
     // 将 ? 占位符转换为 $1, $2...
     pgSql = pgSql.replace(/\?/g, () => {
       const param = params[paramIndex];
@@ -82,7 +85,7 @@ if (usePostgres) {
       newParams.push(param);
       return `$${newParams.length}`;
     });
-    
+
     return { sql: pgSql, params: newParams };
   }
   
