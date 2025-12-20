@@ -91,6 +91,7 @@ if (usePostgres) {
   
   // PostgreSQL 包装器
   db = {
+    isPostgres: true,
     run: (sql, params, callback) => {
       // 兼容 sqlite3 的 callback 语义：INSERT 时通过 this.lastID 返回自增 id
       // PostgreSQL 下如果原 SQL 没有 RETURNING，则自动追加 RETURNING id
@@ -237,6 +238,26 @@ if (usePostgres) {
           "order" INTEGER DEFAULT 0
         )
       `);
+
+      // 兜底去重：避免因前端重复提交/代理重试导致同一 url 多次导入
+      // 注意：sub_menu_id 允许为 NULL，普通 UNIQUE(menu_id, sub_menu_id, url) 无法约束 NULL 重复
+      // 所以使用表达式索引对 NULL 做 COALESCE
+      await poolQuery(`
+        WITH ranked AS (
+          SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY menu_id, COALESCE(sub_menu_id, 0), url
+            ORDER BY id
+          ) AS rn
+          FROM cards
+        )
+        DELETE FROM cards
+        WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
+      `);
+
+      await poolQuery(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_cards_menu_sub_url
+        ON cards (menu_id, COALESCE(sub_menu_id, 0), url)
+      `);
       
       await poolQuery(`
         CREATE TABLE IF NOT EXISTS users (
@@ -361,6 +382,7 @@ if (usePostgres) {
   
   const dbPath = path.join(dbDir, 'nav.db');
   db = new sqlite3.Database(dbPath);
+  db.isPostgres = false;
   
   // SQLite 初始化
   db.serialize(() => {
@@ -391,6 +413,21 @@ if (usePostgres) {
       FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE,
       FOREIGN KEY (sub_menu_id) REFERENCES sub_menus(id) ON DELETE CASCADE
     )`);
+
+    // 兜底去重 + 唯一索引：避免书签导入重复
+    db.run(`
+      DELETE FROM cards
+      WHERE id NOT IN (
+        SELECT MIN(id)
+        FROM cards
+        GROUP BY menu_id, IFNULL(sub_menu_id, 0), url
+      )
+    `);
+
+    db.run(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_cards_menu_sub_url
+      ON cards(menu_id, IFNULL(sub_menu_id, 0), url)
+    `);
     
     db.run(`CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

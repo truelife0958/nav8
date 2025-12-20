@@ -28,6 +28,19 @@
           </svg>
           导入书签
         </button>
+        <button class="btn btn-check" @click="checkDuplicates">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+          检测重复
+        </button>
+        <button v-if="duplicateIds.size > 0" class="btn btn-select-dup" @click="selectDuplicates">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <path d="M9 9h6v6H9z"/>
+          </svg>
+          选中重复({{ duplicateIds.size }})
+        </button>
       </div>
     </div>
     
@@ -63,7 +76,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="card in cards" :key="card.id" :class="{ selected: selectedCards.includes(card.id) }">
+          <tr v-for="card in cards" :key="card.id" :class="{ selected: selectedCards.includes(card.id), duplicate: duplicateIds.has(card.id) }">
             <td class="checkbox-col"><input type="checkbox" :checked="selectedCards.includes(card.id)" @change="toggleSelect(card.id)" /></td>
             <td><input v-model="card.title" @blur="updateCard(card)" class="table-input" /></td>
             <td><input v-model="card.url" @blur="updateCard(card)" class="table-input" /></td>
@@ -158,6 +171,9 @@ const selectedCards = ref([]);
 const batchTargetMenuId = ref('');
 const batchTargetSubMenuId = ref('');
 
+// 重复检测
+const duplicateIds = ref(new Set());
+
 // Toast提示
 const toast = ref({ show: false, message: '', type: 'info' });
 
@@ -229,6 +245,55 @@ async function loadCards() {
   if (!selectedMenuId.value) return;
   const res = await getCards(selectedMenuId.value, selectedSubMenuId.value || null);
   cards.value = res.data;
+  duplicateIds.value = new Set(); // 清除重复标记
+}
+
+// 检测重复卡片（按URL）
+function checkDuplicates() {
+  const urlMap = new Map();
+  const dups = new Set();
+  
+  for (const card of cards.value) {
+    const normalizedUrl = normalizeUrl(card.url);
+    if (urlMap.has(normalizedUrl)) {
+      dups.add(card.id);
+      dups.add(urlMap.get(normalizedUrl));
+    } else {
+      urlMap.set(normalizedUrl, card.id);
+    }
+  }
+  
+  duplicateIds.value = dups;
+  
+  if (dups.size > 0) {
+    showToast(`发现 ${dups.size} 个重复卡片（已高亮显示），可点击"选中重复"批量删除`, 'warning');
+  } else {
+    showToast('未发现重复卡片', 'success');
+  }
+}
+
+// 选中所有重复卡片
+function selectDuplicates() {
+  if (duplicateIds.value.size === 0) {
+    showToast('请先检测重复卡片', 'warning');
+    return;
+  }
+  selectedCards.value = [...duplicateIds.value];
+  showToast(`已选中 ${selectedCards.value.length} 个重复卡片，可批量删除`, 'info');
+}
+
+function normalizeUrl(url) {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+    u.hash = '';
+    if (u.pathname !== '/') {
+      u.pathname = u.pathname.replace(/\/+$/g, '');
+    }
+    return u.toString().toLowerCase();
+  } catch {
+    return url.replace(/\/+$/g, '').toLowerCase();
+  }
 }
 
 // 批量选择相关
@@ -638,12 +703,37 @@ tr.selected {
   background: #eff6ff;
 }
 
+/* 重复卡片高亮 */
+tr.duplicate {
+  background: #fef2f2;
+  border-left: 3px solid #ef4444;
+}
+tr.duplicate td {
+  color: #dc2626;
+}
+
 /* 导入按钮 */
 .btn-import {
   background: #8b5cf6;
 }
 .btn-import:hover {
   background: #7c3aed;
+}
+
+/* 检测重复按钮 */
+.btn-check {
+  background: #f59e0b;
+}
+.btn-check:hover {
+  background: #d97706;
+}
+
+/* 选中重复按钮 */
+.btn-select-dup {
+  background: #ef4444;
+}
+.btn-select-dup:hover {
+  background: #dc2626;
 }
 
 /* 导入弹窗样式 */
