@@ -14,11 +14,24 @@ if (usePostgres) {
   // SSL配置：只有明确设置 POSTGRES_SSL=true 时才启用SSL
   // Zeabur内部PostgreSQL不需要SSL
   const useSSL = process.env.POSTGRES_SSL === 'true';
-  
+
+  // 一些托管 Postgres / 连接池代理（如 PgBouncer 事务池）会导致 prepared statement 异常。
+  // 默认使用 simple query 协议以提升兼容性；如需 extended 协议可设置 PG_QUERY_MODE=extended。
+  const pgQueryModeEnv = (process.env.PG_QUERY_MODE || 'simple').toLowerCase();
+  const pgQueryMode = pgQueryModeEnv === 'extended' ? undefined : 'simple';
+
   const pool = new Pool({
     connectionString,
     ssl: useSSL ? { rejectUnauthorized: false } : false
   });
+
+  function poolQuery(sql, params = []) {
+    return pool.query({
+      text: sql,
+      values: params,
+      queryMode: pgQueryMode
+    });
+  }
   
   // 转换 SQL 和参数
   function convertQuery(sql, params) {
@@ -50,7 +63,7 @@ if (usePostgres) {
       const sqlWithReturning = shouldReturnId ? `${sql} RETURNING id` : sql;
       const converted = convertQuery(sqlWithReturning, params || []);
 
-      pool.query(converted.sql, converted.params, (err, result) => {
+      pool.query({ text: converted.sql, values: converted.params, queryMode: pgQueryMode }, (err, result) => {
         if (callback) {
           if (err) {
             console.error('SQL Error:', converted.sql, converted.params, err.message);
@@ -71,7 +84,7 @@ if (usePostgres) {
     get: (sql, params, callback) => {
       const converted = convertQuery(sql, params || []);
       
-      pool.query(converted.sql, converted.params, (err, result) => {
+      pool.query({ text: converted.sql, values: converted.params, queryMode: pgQueryMode }, (err, result) => {
         if (callback) {
           if (err) {
             console.error('SQL Error:', converted.sql, converted.params, err.message);
@@ -84,7 +97,7 @@ if (usePostgres) {
     all: (sql, params, callback) => {
       const converted = convertQuery(sql, params || []);
       
-      pool.query(converted.sql, converted.params, (err, result) => {
+      pool.query({ text: converted.sql, values: converted.params, queryMode: pgQueryMode }, (err, result) => {
         if (callback) {
           if (err) {
             console.error('SQL Error:', converted.sql, converted.params, err.message);
@@ -115,7 +128,7 @@ if (usePostgres) {
   async function initPostgres() {
     try {
       // 检查表结构是否正确（menus.id 应该是 integer 类型）
-      const checkResult = await pool.query(`
+      const checkResult = await poolQuery(`
         SELECT data_type FROM information_schema.columns
         WHERE table_name = 'menus' AND column_name = 'id'
       `);
@@ -123,15 +136,15 @@ if (usePostgres) {
       // 如果表存在但类型不对，需要重建所有表
       if (checkResult.rows.length > 0 && checkResult.rows[0].data_type !== 'integer') {
         console.log('检测到旧表结构不兼容，正在重建数据库表...');
-        await pool.query('DROP TABLE IF EXISTS cards CASCADE');
-        await pool.query('DROP TABLE IF EXISTS sub_menus CASCADE');
-        await pool.query('DROP TABLE IF EXISTS menus CASCADE');
-        await pool.query('DROP TABLE IF EXISTS ads CASCADE');
-        await pool.query('DROP TABLE IF EXISTS friends CASCADE');
+        await poolQuery('DROP TABLE IF EXISTS cards CASCADE');
+        await poolQuery('DROP TABLE IF EXISTS sub_menus CASCADE');
+        await poolQuery('DROP TABLE IF EXISTS menus CASCADE');
+        await poolQuery('DROP TABLE IF EXISTS ads CASCADE');
+        await poolQuery('DROP TABLE IF EXISTS friends CASCADE');
         // 保留 users 表
       }
       
-      await pool.query(`
+      await poolQuery(`
         CREATE TABLE IF NOT EXISTS menus (
           id SERIAL PRIMARY KEY,
           name TEXT NOT NULL,
@@ -139,7 +152,7 @@ if (usePostgres) {
         )
       `);
       
-      await pool.query(`
+      await poolQuery(`
         CREATE TABLE IF NOT EXISTS sub_menus (
           id SERIAL PRIMARY KEY,
           parent_id INTEGER NOT NULL REFERENCES menus(id) ON DELETE CASCADE,
@@ -148,7 +161,7 @@ if (usePostgres) {
         )
       `);
       
-      await pool.query(`
+      await poolQuery(`
         CREATE TABLE IF NOT EXISTS cards (
           id SERIAL PRIMARY KEY,
           menu_id INTEGER REFERENCES menus(id) ON DELETE CASCADE,
@@ -162,7 +175,7 @@ if (usePostgres) {
         )
       `);
       
-      await pool.query(`
+      await poolQuery(`
         CREATE TABLE IF NOT EXISTS users (
           id SERIAL PRIMARY KEY,
           username TEXT UNIQUE NOT NULL,
@@ -173,29 +186,22 @@ if (usePostgres) {
       `);
       
       // 确保users表有last_login_time和last_login_ip列（兼容旧表）
-      const colCheck = await pool.query(`
+      const colCheck = await poolQuery(`
         SELECT column_name FROM information_schema.columns
         WHERE table_name='users' AND column_name IN ('last_login_time', 'last_login_ip')
       `);
       const existingCols = colCheck.rows.map(r => r.column_name);
       
       if (!existingCols.includes('last_login_time')) {
-        await pool.query('ALTER TABLE users ADD COLUMN last_login_time TEXT');
+        await poolQuery('ALTER TABLE users ADD COLUMN last_login_time TEXT');
         console.log('已添加 last_login_time 列');
       }
       if (!existingCols.includes('last_login_ip')) {
-        await pool.query('ALTER TABLE users ADD COLUMN last_login_ip TEXT');
+        await poolQuery('ALTER TABLE users ADD COLUMN last_login_ip TEXT');
         console.log('已添加 last_login_ip 列');
       }
       
-      // 清除prepared statement缓存（通过DISCARD ALL）
-      try {
-        await pool.query('DISCARD ALL');
-      } catch (e) {
-        // 忽略DISCARD错误
-      }
-      
-      await pool.query(`
+      await poolQuery(`
         CREATE TABLE IF NOT EXISTS ads (
           id SERIAL PRIMARY KEY,
           position TEXT NOT NULL,
@@ -204,7 +210,7 @@ if (usePostgres) {
         )
       `);
       
-      await pool.query(`
+      await poolQuery(`
         CREATE TABLE IF NOT EXISTS friends (
           id SERIAL PRIMARY KEY,
           title TEXT NOT NULL,
@@ -214,10 +220,10 @@ if (usePostgres) {
       `);
       
       // 创建索引
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_menus_order ON menus("order")`);
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_sub_menus_parent_id ON sub_menus(parent_id)`);
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_cards_menu_id ON cards(menu_id)`);
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_cards_sub_menu_id ON cards(sub_menu_id)`);
+      await poolQuery(`CREATE INDEX IF NOT EXISTS idx_menus_order ON menus("order")`);
+      await poolQuery(`CREATE INDEX IF NOT EXISTS idx_sub_menus_parent_id ON sub_menus(parent_id)`);
+      await poolQuery(`CREATE INDEX IF NOT EXISTS idx_cards_menu_id ON cards(menu_id)`);
+      await poolQuery(`CREATE INDEX IF NOT EXISTS idx_cards_sub_menu_id ON cards(sub_menu_id)`);
       
       console.log('PostgreSQL 数据库表初始化完成');
       
@@ -230,7 +236,7 @@ if (usePostgres) {
   
   async function insertDefaultDataPg(pool) {
     try {
-      const menuResult = await pool.query('SELECT COUNT(*) as count FROM menus');
+      const menuResult = await poolQuery('SELECT COUNT(*) as count FROM menus');
       if (parseInt(menuResult.rows[0].count) === 0) {
         console.log('插入默认菜单...');
         const defaultMenus = [
@@ -239,7 +245,7 @@ if (usePostgres) {
         ];
         
         for (const [name, order] of defaultMenus) {
-          await pool.query('INSERT INTO menus (name, "order") VALUES ($1, $2)', [name, order]);
+          await poolQuery('INSERT INTO menus (name, "order") VALUES ($1, $2)', [name, order]);
         }
         console.log('默认菜单插入完成');
         
@@ -252,7 +258,7 @@ if (usePostgres) {
         ];
         
         for (const [menuId, title, url, logo, desc, order] of defaultCards) {
-          await pool.query(
+          await poolQuery(
             'INSERT INTO cards (menu_id, title, url, logo_url, "desc", "order") VALUES ($1, $2, $3, $4, $5, $6)',
             [menuId, title, url, logo, desc, order]
           );
@@ -262,13 +268,13 @@ if (usePostgres) {
       
       // 管理员账号
       const passwordHash = bcrypt.hashSync(config.admin.password, 10);
-      const userResult = await pool.query('SELECT * FROM users WHERE username = $1', [config.admin.username]);
+      const userResult = await poolQuery('SELECT * FROM users WHERE username = $1', [config.admin.username]);
       
       if (userResult.rows.length === 0) {
-        await pool.query('INSERT INTO users (username, password) VALUES ($1, $2)', [config.admin.username, passwordHash]);
+        await poolQuery('INSERT INTO users (username, password) VALUES ($1, $2)', [config.admin.username, passwordHash]);
         console.log('已创建管理员账号:', config.admin.username);
       } else {
-        await pool.query('UPDATE users SET password = $1 WHERE username = $2', [passwordHash, config.admin.username]);
+        await poolQuery('UPDATE users SET password = $1 WHERE username = $2', [passwordHash, config.admin.username]);
         console.log('已更新管理员密码');
       }
       
