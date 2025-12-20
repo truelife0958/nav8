@@ -191,22 +191,8 @@ if (usePostgres) {
   // PostgreSQL 初始化
   async function initPostgres() {
     try {
-      // 检查表结构是否正确（menus.id 应该是 integer 类型）
-      const checkResult = await poolQuery(`
-        SELECT data_type FROM information_schema.columns
-        WHERE table_name = 'menus' AND column_name = 'id'
-      `);
-      
-      // 如果表存在但类型不对，需要重建所有表
-      if (checkResult.rows.length > 0 && checkResult.rows[0].data_type !== 'integer') {
-        console.log('检测到旧表结构不兼容，正在重建数据库表...');
-        await poolQuery('DROP TABLE IF EXISTS cards CASCADE');
-        await poolQuery('DROP TABLE IF EXISTS sub_menus CASCADE');
-        await poolQuery('DROP TABLE IF EXISTS menus CASCADE');
-        await poolQuery('DROP TABLE IF EXISTS ads CASCADE');
-        await poolQuery('DROP TABLE IF EXISTS friends CASCADE');
-        // 保留 users 表
-      }
+      // 注意：不再自动删除表，避免数据丢失
+      // 如需重建表结构，请手动执行 SQL 或使用备份恢复功能
       
       await poolQuery(`
         CREATE TABLE IF NOT EXISTS menus (

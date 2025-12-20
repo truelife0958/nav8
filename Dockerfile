@@ -19,7 +19,9 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-RUN mkdir -p uploads database web/dist
+# 创建目录并设置权限，确保 node 用户可以读写
+RUN mkdir -p uploads database web/dist && \
+    chown -R node:node /app
 
 COPY package*.json ./
 
