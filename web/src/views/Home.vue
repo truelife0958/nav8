@@ -64,6 +64,12 @@
           </svg>
           友情链接
         </button>
+        <router-link to="/admin" class="admin-link-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+          </svg>
+          后台管理
+        </router-link>
         <p class="copyright">Copyright © 2025 Nav8 | <a href="https://github.com/truelife0958/nav8" target="_blank" class="footer-link">Powered by truelife0958</a></p>
       </div>
     </footer>
@@ -150,9 +156,15 @@ const searchEngines = [
   },
   {
     name: 'github',
-    label: 'github',
+    label: 'GitHub',
     placeholder: 'GitHub 搜索...',
     url: q => `https://github.com/search?q=${encodeURIComponent(q)}&type=repositories`
+  },
+  {
+    name: 'linuxdo',
+    label: 'Linux.do',
+    placeholder: 'Linux.do 搜索...',
+    url: q => `https://linux.do/search?q=${encodeURIComponent(q)}`
   },
   {
     name: 'site',
@@ -507,7 +519,8 @@ function handleLogoError(event) {
   gap: 50px;
 }
 
-.friend-link-btn {
+.friend-link-btn,
+.admin-link-btn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -518,9 +531,11 @@ function handleLogoError(event) {
   transition: all 0.3s ease;
   font-size: 14px;
   padding: 0;
+  text-decoration: none;
 }
 
-.friend-link-btn:hover {
+.friend-link-btn:hover,
+.admin-link-btn:hover {
   color: #1976d2;
   transform: translateY(-1px);
 }
@@ -768,7 +783,8 @@ function handleLogoError(event) {
   .footer {
     padding-top: 2rem;
   }
-  .friend-link-btn {
+  .friend-link-btn,
+  .admin-link-btn {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -779,6 +795,7 @@ function handleLogoError(event) {
     transition: all 0.3s ease;
     font-size: 0.7rem;
     padding: 0;
+    text-decoration: none;
   }
   .copyright {
     color: rgba(255, 255, 255, 0.8);
