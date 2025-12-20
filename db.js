@@ -225,24 +225,16 @@ if (usePostgres) {
         )
       `);
 
-      // 兜底去重：避免因前端重复提交/代理重试导致同一 url 多次导入
-      // 注意：sub_menu_id 允许为 NULL，普通 UNIQUE(menu_id, sub_menu_id, url) 无法约束 NULL 重复
-      // 所以使用表达式索引对 NULL 做 COALESCE
+      // 唯一约束：单个子菜单内不允许重复URL，不同子菜单可以重复
+      // 如果 sub_menu_id 为 NULL（卡片直接属于主菜单），则用 menu_id 区分
+      // 删除旧索引（如果存在）
+      await poolQuery(`DROP INDEX IF EXISTS uq_cards_menu_sub_url`);
+      
+      // 创建新的唯一索引：基于 sub_menu_id 和 url
+      // 对于 sub_menu_id 为 NULL 的情况，使用负的 menu_id 作为替代值
       await poolQuery(`
-        WITH ranked AS (
-          SELECT id, ROW_NUMBER() OVER (
-            PARTITION BY menu_id, COALESCE(sub_menu_id, 0), url
-            ORDER BY id
-          ) AS rn
-          FROM cards
-        )
-        DELETE FROM cards
-        WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
-      `);
-
-      await poolQuery(`
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_cards_menu_sub_url
-        ON cards (menu_id, COALESCE(sub_menu_id, 0), url)
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_cards_sub_url
+        ON cards (COALESCE(sub_menu_id, -menu_id), url)
       `);
       
       await poolQuery(`
@@ -400,19 +392,15 @@ if (usePostgres) {
       FOREIGN KEY (sub_menu_id) REFERENCES sub_menus(id) ON DELETE CASCADE
     )`);
 
-    // 兜底去重 + 唯一索引：避免书签导入重复
+    // 唯一约束：单个子菜单内不允许重复URL，不同子菜单可以重复
+    // 删除旧索引（如果存在）
+    db.run(`DROP INDEX IF EXISTS uq_cards_menu_sub_url`);
+    
+    // 创建新的唯一索引：基于 sub_menu_id 和 url
+    // 对于 sub_menu_id 为 NULL 的情况，使用负的 menu_id 作为替代值
     db.run(`
-      DELETE FROM cards
-      WHERE id NOT IN (
-        SELECT MIN(id)
-        FROM cards
-        GROUP BY menu_id, IFNULL(sub_menu_id, 0), url
-      )
-    `);
-
-    db.run(`
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_cards_menu_sub_url
-      ON cards(menu_id, IFNULL(sub_menu_id, 0), url)
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_cards_sub_url
+      ON cards(IFNULL(sub_menu_id, -menu_id), url)
     `);
     
     db.run(`CREATE TABLE IF NOT EXISTS users (

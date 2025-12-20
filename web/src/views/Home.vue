@@ -53,6 +53,21 @@
       </a>
     </div>
     
+    <!-- 子菜单横向滑动区域 -->
+    <div v-if="currentSubMenus.length > 0" class="sub-menu-section">
+      <div class="sub-menu-scroll">
+        <button
+          v-for="subMenu in currentSubMenus"
+          :key="subMenu.id"
+          @click="selectSubMenu(subMenu)"
+          :class="['sub-menu-btn', { active: activeSubMenu?.id === subMenu.id }]"
+        >
+          {{ subMenu.name }}
+        </button>
+      </div>
+      <div class="sub-menu-divider"></div>
+    </div>
+    
     <CardGrid :cards="filteredCards"/>
     
     <footer class="footer">
@@ -185,10 +200,15 @@ function clearSearch() {
 
 const filteredCards = computed(() => {
   if (!searchQuery.value) return cards.value;
-  return cards.value.filter(card => 
+  return cards.value.filter(card =>
     card.title.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
     card.url.toLowerCase().includes(searchQuery.value.toLowerCase())
   );
+});
+
+// 当前主菜单的子菜单列表
+const currentSubMenus = computed(() => {
+  return activeMenu.value?.subMenus || [];
 });
 
 onMounted(async () => {
@@ -230,6 +250,12 @@ async function selectMenu(menu, parentMenu = null) {
     activeMenu.value = menu;
     activeSubMenu.value = null;
   }
+  await loadCards();
+}
+
+// 选择子菜单
+async function selectSubMenu(subMenu) {
+  activeSubMenu.value = subMenu;
   await loadCards();
 }
 
@@ -443,6 +469,59 @@ function handleLogoError(event) {
   align-items: center;
   width: 100%;
   max-width: 480px;
+}
+
+/* 子菜单横向滑动区域 */
+.sub-menu-section {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.sub-menu-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 8px 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.sub-menu-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.sub-menu-btn {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(5px);
+}
+
+.sub-menu-btn:hover {
+  background: rgba(57, 157, 255, 0.3);
+  border-color: rgba(57, 157, 255, 0.5);
+}
+
+.sub-menu-btn.active {
+  background: rgba(57, 157, 255, 0.5);
+  border-color: #399dff;
+  color: #fff;
+}
+
+.sub-menu-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  margin: 8px 0 16px;
 }
 
 .content-wrapper {
