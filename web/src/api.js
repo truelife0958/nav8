@@ -4,8 +4,28 @@ const BASE = '/api';
 // 创建axios实例
 const api = axios.create({
   baseURL: BASE,
-  timeout: 10000
+  timeout: 15000
 });
+
+// 提取错误消息
+const getErrorMessage = (error) => {
+  if (error.response?.data?.error) {
+    return error.response.data.error;
+  }
+  if (error.response?.status === 404) {
+    return '请求的资源不存在';
+  }
+  if (error.response?.status === 500) {
+    return '服务器内部错误';
+  }
+  if (error.code === 'ECONNABORTED') {
+    return '请求超时，请检查网络';
+  }
+  if (!error.response) {
+    return '网络连接失败，请检查网络';
+  }
+  return error.message || '操作失败';
+};
 
 // 请求拦截器 - 自动添加token
 api.interceptors.request.use(
@@ -19,10 +39,11 @@ api.interceptors.request.use(
   error => Promise.reject(error)
 );
 
-// 响应拦截器 - 处理token过期
+// 响应拦截器 - 处理错误
 api.interceptors.response.use(
   response => response,
   error => {
+    // 处理401未授权
     if (error.response?.status === 401) {
       const currentPath = window.location.pathname;
       if (currentPath.startsWith('/admin')) {
@@ -30,9 +51,14 @@ api.interceptors.response.use(
         window.location.reload();
       }
     }
+    // 添加友好错误消息
+    error.friendlyMessage = getErrorMessage(error);
     return Promise.reject(error);
   }
 );
+
+// 导出错误消息提取函数供组件使用
+export { getErrorMessage };
 
 export const login = (username, password) => api.post('/login', { username, password });
 

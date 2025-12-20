@@ -1,74 +1,106 @@
 const express = require('express');
 const db = require('../db');
 const auth = require('./authMiddleware');
+const { validateAd, isPositiveInteger } = require('../utils/validator');
 const router = express.Router();
 
 // 获取广告
 router.get('/', (req, res) => {
   const { page, pageSize } = req.query;
+  
   if (!page && !pageSize) {
     db.all('SELECT * FROM ads', [], (err, rows) => {
-      if (err) return res.status(500).json({error: err.message});
-      res.json(rows);
+      if (err) {
+        console.error('获取广告失败:', err);
+        return res.status(500).json({ error: '获取广告失败' });
+      }
+      res.json(rows || []);
     });
   } else {
-    const pageNum = parseInt(page) || 1;
-    const size = parseInt(pageSize) || 10;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const size = Math.min(100, Math.max(1, parseInt(pageSize) || 10));
     const offset = (pageNum - 1) * size;
+    
     db.get('SELECT COUNT(*) as total FROM ads', [], (err, countRow) => {
-      if (err) return res.status(500).json({error: err.message});
+      if (err) {
+        console.error('获取广告数量失败:', err);
+        return res.status(500).json({ error: '获取广告失败' });
+      }
+      
       db.all('SELECT * FROM ads LIMIT ? OFFSET ?', [size, offset], (err, rows) => {
-        if (err) return res.status(500).json({error: err.message});
+        if (err) {
+          console.error('获取广告列表失败:', err);
+          return res.status(500).json({ error: '获取广告失败' });
+        }
         res.json({
-          total: countRow.total,
+          total: countRow?.total || 0,
           page: pageNum,
           pageSize: size,
-          data: rows
+          data: rows || []
         });
       });
     });
   }
 });
+
 // 新增广告
 router.post('/', auth, (req, res) => {
-  const { position, img, url } = req.body;
+  const validation = validateAd(req.body);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
+  }
   
-  // 输入验证
-  if (!position || !img || !url) {
-    return res.status(400).json({ error: '请填写完整的广告信息' });
-  }
-  if (!['left', 'right'].includes(position)) {
-    return res.status(400).json({ error: '广告位置只能是left或right' });
-  }
+  const { position, img, url } = validation.data;
   
   db.run('INSERT INTO ads (position, img, url) VALUES (?, ?, ?)', [position, img, url], function(err) {
-    if (err) return res.status(500).json({error: '添加失败'});
+    if (err) {
+      console.error('添加广告失败:', err);
+      return res.status(500).json({ error: '添加失败' });
+    }
     res.json({ id: this.lastID });
   });
 });
+
 // 修改广告
 router.put('/:id', auth, (req, res) => {
-  const { position, img, url } = req.body;
-  
-  // 输入验证
-  if (!position || !img || !url) {
-    return res.status(400).json({ error: '请填写完整的广告信息' });
-  }
-  if (!['left', 'right'].includes(position)) {
-    return res.status(400).json({ error: '广告位置只能是left或right' });
+  const adId = req.params.id;
+  if (!isPositiveInteger(adId)) {
+    return res.status(400).json({ error: '无效的广告ID' });
   }
   
-  db.run('UPDATE ads SET position=?, img=?, url=? WHERE id=?', [position, img, url, req.params.id], function(err) {
-    if (err) return res.status(500).json({error: err.message});
+  const validation = validateAd(req.body);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
+  }
+  
+  const { position, img, url } = validation.data;
+  
+  db.run('UPDATE ads SET position=?, img=?, url=? WHERE id=?', [position, img, url, Number(adId)], function(err) {
+    if (err) {
+      console.error('更新广告失败:', err);
+      return res.status(500).json({ error: '更新失败' });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: '广告不存在' });
+    }
     res.json({ changed: this.changes });
   });
 });
+
 // 删除广告
 router.delete('/:id', auth, (req, res) => {
-  db.run('DELETE FROM ads WHERE id=?', [req.params.id], function(err) {
-    if (err) return res.status(500).json({error: err.message});
+  const adId = req.params.id;
+  if (!isPositiveInteger(adId)) {
+    return res.status(400).json({ error: '无效的广告ID' });
+  }
+  
+  db.run('DELETE FROM ads WHERE id=?', [Number(adId)], function(err) {
+    if (err) {
+      console.error('删除广告失败:', err);
+      return res.status(500).json({ error: '删除失败' });
+    }
     res.json({ deleted: this.changes });
   });
 });
 
-module.exports = router; 
+module.exports = router;

@@ -1,98 +1,139 @@
 const express = require('express');
 const db = require('../db');
 const auth = require('./authMiddleware');
+const { validateCard, validateIdArray, isPositiveInteger } = require('../utils/validator');
 const router = express.Router();
 
 // 获取指定菜单的卡片
 router.get('/:menuId', (req, res) => {
+  const menuId = req.params.menuId;
   const { subMenuId } = req.query;
+  
+  // 验证menuId
+  if (!isPositiveInteger(menuId)) {
+    return res.status(400).json({ error: '无效的菜单ID' });
+  }
+  
   let query, params;
   
   if (subMenuId) {
-    // 获取指定子菜单的卡片
+    if (!isPositiveInteger(subMenuId)) {
+      return res.status(400).json({ error: '无效的子菜单ID' });
+    }
     query = 'SELECT * FROM cards WHERE sub_menu_id = ? ORDER BY "order"';
-    params = [subMenuId];
+    params = [Number(subMenuId)];
   } else {
-    // 获取主菜单的卡片（不包含子菜单的卡片）
     query = 'SELECT * FROM cards WHERE menu_id = ? AND sub_menu_id IS NULL ORDER BY "order"';
-    params = [req.params.menuId];
+    params = [Number(menuId)];
   }
   
   db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({error: err.message});
-    rows.forEach(card => {
-      if (!card.custom_logo_path) {
-        try {
-          card.display_logo = card.logo_url || (card.url ? card.url.replace(/\/+$/, '') + '/favicon.ico' : '/default-favicon.png');
-        } catch {
-          card.display_logo = '/default-favicon.png';
+    if (err) {
+      console.error('获取卡片失败:', err);
+      return res.status(500).json({ error: '获取卡片失败' });
+    }
+    
+    const cards = (rows || []).map(card => {
+      let display_logo = '/default-favicon.png';
+      try {
+        if (card.custom_logo_path) {
+          display_logo = '/uploads/' + card.custom_logo_path;
+        } else if (card.logo_url) {
+          display_logo = card.logo_url;
+        } else if (card.url) {
+          display_logo = card.url.replace(/\/+$/, '') + '/favicon.ico';
         }
-      } else {
-        card.display_logo = '/uploads/' + card.custom_logo_path;
+      } catch (e) {
+        // 保持默认图标
       }
+      return { ...card, display_logo };
     });
-    res.json(rows);
+    
+    res.json(cards);
   });
 });
 
-// 新增、修改、删除卡片需认证
+// 新增卡片
 router.post('/', auth, (req, res) => {
-  const { menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, desc, order } = req.body;
-  
-  // 输入验证
-  if (!menu_id || !title || !url) {
-    return res.status(400).json({ error: '请填写菜单、标题和链接' });
-  }
-  if (typeof title !== 'string' || typeof url !== 'string') {
-    return res.status(400).json({ error: '参数格式错误' });
+  const validation = validateCard(req.body);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
   }
   
-  db.run('INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [menu_id, sub_menu_id || null, title.trim(), url.trim(), logo_url || '', custom_logo_path || '', desc || '', order || 0], function(err) {
-    if (err) return res.status(500).json({error: '添加失败'});
-    res.json({ id: this.lastID });
-  });
+  const { menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, desc, order } = validation.data;
+  
+  db.run(
+    'INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, desc, order],
+    function(err) {
+      if (err) {
+        console.error('添加卡片失败:', err);
+        return res.status(500).json({ error: '添加失败' });
+      }
+      res.json({ id: this.lastID });
+    }
+  );
 });
 
+// 修改卡片
 router.put('/:id', auth, (req, res) => {
-  const { menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, desc, order } = req.body;
-  
-  // 输入验证
-  if (!menu_id || !title || !url) {
-    return res.status(400).json({ error: '请填写菜单、标题和链接' });
-  }
-  if (typeof title !== 'string' || typeof url !== 'string') {
-    return res.status(400).json({ error: '参数格式错误' });
+  const cardId = req.params.id;
+  if (!isPositiveInteger(cardId)) {
+    return res.status(400).json({ error: '无效的卡片ID' });
   }
   
-  db.run('UPDATE cards SET menu_id=?, sub_menu_id=?, title=?, url=?, logo_url=?, custom_logo_path=?, "desc"=?, "order"=? WHERE id=?',
-    [menu_id, sub_menu_id || null, title.trim(), url.trim(), logo_url || '', custom_logo_path || '', desc || '', order || 0, req.params.id], function(err) {
-    if (err) return res.status(500).json({error: err.message});
-    res.json({ changed: this.changes });
-  });
+  const validation = validateCard(req.body);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
+  }
+  
+  const { menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, desc, order } = validation.data;
+  
+  db.run(
+    'UPDATE cards SET menu_id=?, sub_menu_id=?, title=?, url=?, logo_url=?, custom_logo_path=?, "desc"=?, "order"=? WHERE id=?',
+    [menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, desc, order, Number(cardId)],
+    function(err) {
+      if (err) {
+        console.error('更新卡片失败:', err);
+        return res.status(500).json({ error: '更新失败' });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: '卡片不存在' });
+      }
+      res.json({ changed: this.changes });
+    }
+  );
 });
 
+// 删除卡片
 router.delete('/:id', auth, (req, res) => {
-  db.run('DELETE FROM cards WHERE id=?', [req.params.id], function(err) {
-    if (err) return res.status(500).json({error: err.message});
+  const cardId = req.params.id;
+  if (!isPositiveInteger(cardId)) {
+    return res.status(400).json({ error: '无效的卡片ID' });
+  }
+  
+  db.run('DELETE FROM cards WHERE id=?', [Number(cardId)], function(err) {
+    if (err) {
+      console.error('删除卡片失败:', err);
+      return res.status(500).json({ error: '删除失败' });
+    }
     res.json({ deleted: this.changes });
   });
 });
 
 // 批量删除卡片
 router.post('/batch/delete', auth, (req, res) => {
-  const { ids } = req.body;
-  if (!ids || !Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ error: '请选择要删除的卡片' });
+  const validation = validateIdArray(req.body.ids, '卡片');
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
   }
-  // 验证 ids 都是有效的数字
-  const validIds = ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0).map(Number);
-  if (validIds.length === 0) {
-    return res.status(400).json({ error: '无效的卡片ID' });
-  }
-  const placeholders = validIds.map(() => '?').join(',');
-  db.run(`DELETE FROM cards WHERE id IN (${placeholders})`, validIds, function(err) {
-    if (err) return res.status(500).json({ error: '删除失败' });
+  
+  const placeholders = validation.ids.map(() => '?').join(',');
+  db.run(`DELETE FROM cards WHERE id IN (${placeholders})`, validation.ids, function(err) {
+    if (err) {
+      console.error('批量删除卡片失败:', err);
+      return res.status(500).json({ error: '删除失败' });
+    }
     res.json({ deleted: this.changes });
   });
 });
@@ -100,23 +141,30 @@ router.post('/batch/delete', auth, (req, res) => {
 // 批量移动卡片
 router.post('/batch/move', auth, (req, res) => {
   const { ids, menu_id, sub_menu_id } = req.body;
-  if (!ids || !Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ error: '请选择要移动的卡片' });
+  
+  const idsValidation = validateIdArray(ids, '卡片');
+  if (!idsValidation.valid) {
+    return res.status(400).json({ error: idsValidation.error });
   }
-  if (!menu_id || !Number.isInteger(Number(menu_id))) {
+  
+  if (!isPositiveInteger(menu_id)) {
     return res.status(400).json({ error: '请选择有效的目标菜单' });
   }
-  // 验证 ids 都是有效的数字
-  const validIds = ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0).map(Number);
-  if (validIds.length === 0) {
-    return res.status(400).json({ error: '无效的卡片ID' });
-  }
-  const placeholders = validIds.map(() => '?').join(',');
-  db.run(`UPDATE cards SET menu_id = ?, sub_menu_id = ? WHERE id IN (${placeholders})`,
-    [Number(menu_id), sub_menu_id ? Number(sub_menu_id) : null, ...validIds], function(err) {
-    if (err) return res.status(500).json({ error: '移动失败' });
-    res.json({ moved: this.changes });
-  });
+  
+  const targetSubMenuId = sub_menu_id && isPositiveInteger(sub_menu_id) ? Number(sub_menu_id) : null;
+  const placeholders = idsValidation.ids.map(() => '?').join(',');
+  
+  db.run(
+    `UPDATE cards SET menu_id = ?, sub_menu_id = ? WHERE id IN (${placeholders})`,
+    [Number(menu_id), targetSubMenuId, ...idsValidation.ids],
+    function(err) {
+      if (err) {
+        console.error('批量移动卡片失败:', err);
+        return res.status(500).json({ error: '移动失败' });
+      }
+      res.json({ moved: this.changes });
+    }
+  );
 });
 
 module.exports = router;

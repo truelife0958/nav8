@@ -94,7 +94,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { login } from '../api';
+import { login, getErrorMessage } from '../api';
 import MenuManage from './admin/MenuManage.vue';
 import CardManage from './admin/CardManage.vue';
 import AdManage from './admin/AdManage.vue';
@@ -147,7 +147,7 @@ async function fetchLastLoginInfo() {
 }
 
 async function handleLogin() {
-  if (!username.value || !password.value) {
+  if (!username.value.trim() || !password.value) {
     loginError.value = '请输入用户名和密码';
     return;
   }
@@ -156,7 +156,7 @@ async function handleLogin() {
   loginError.value = '';
   
   try {
-    const response = await login(username.value, password.value);
+    const response = await login(username.value.trim(), password.value);
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
       isLoggedIn.value = true;
@@ -164,7 +164,7 @@ async function handleLogin() {
       lastLoginIp.value = response.data.lastLoginIp || '';
     }
   } catch (error) {
-    loginError.value = error.response?.data?.message || '登录失败，请检查用户名和密码';
+    loginError.value = getErrorMessage(error);
   } finally {
     loading.value = false;
   }

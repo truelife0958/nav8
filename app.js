@@ -19,26 +19,53 @@ app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
 
+// 安全头中间件
+app.use((req, res, next) => {
+  // 防止点击劫持
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  // 防止MIME类型嗅探
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // XSS保护
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  // 引用策略
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // 请求频率限制 - 通用API限制
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
-  max: 100, // 每个IP最多100次请求
+  max: 200, // 每个IP最多200次请求
   message: { error: '请求过于频繁，请稍后再试' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path.startsWith('/uploads') || !req.path.startsWith('/api')
 });
 
 // 登录接口更严格的限制
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
-  max: 5, // 每个IP最多5次登录尝试
+  max: 10, // 每个IP最多10次登录尝试
   message: { error: '登录尝试过于频繁，请15分钟后再试' },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
+// 写操作限制（POST/PUT/DELETE）
+const writeLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1分钟
+  max: 30, // 每分钟最多30次写操作
+  message: { error: '操作过于频繁，请稍后再试' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // 安全配置
-app.use(cors());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(compression());
@@ -46,6 +73,14 @@ app.use(compression());
 // 应用请求频率限制
 app.use('/api', apiLimiter);
 app.use('/api/login', loginLimiter);
+
+// 写操作限制
+app.use('/api', (req, res, next) => {
+  if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  next();
+});
 
 // 静态文件服务
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
