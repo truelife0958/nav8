@@ -26,7 +26,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import { getFriends, addFriend as apiAddFriend, updateFriend as apiUpdateFriend, deleteFriend as apiDeleteFriend } from '../../api';
+import { getFriends, addFriend as apiAddFriend, updateFriend as apiUpdateFriend, deleteFriend as apiDeleteFriend, getErrorMessage } from '../../api';
 import Toast from '../../components/Toast.vue';
 
 const friends = ref([]);
@@ -60,7 +60,7 @@ async function addFriend() {
     showToast('添加友链成功', 'success');
     loadFriends();
   } catch (error) {
-    showToast('添加友链失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('添加友链失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -69,7 +69,7 @@ async function updateFriend(f) {
     await apiUpdateFriend(f.id, { title: f.title, url: f.url, logo: f.logo });
     loadFriends();
   } catch (error) {
-    showToast('更新友链失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('更新友链失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -80,7 +80,7 @@ async function deleteFriend(id) {
     showToast('删除成功', 'success');
     loadFriends();
   } catch (error) {
-    showToast('删除友链失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('删除友链失败: ' + getErrorMessage(error), 'error');
   }
 }
 </script>

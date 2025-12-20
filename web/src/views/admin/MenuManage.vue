@@ -112,7 +112,8 @@ import {
   deleteMenu as apiDeleteMenu,
   addSubMenu as apiAddSubMenu,
   updateSubMenu as apiUpdateSubMenu,
-  deleteSubMenu as apiDeleteSubMenu
+  deleteSubMenu as apiDeleteSubMenu,
+  getErrorMessage
 } from '../../api';
 import Toast from '../../components/Toast.vue';
 
@@ -150,7 +151,7 @@ async function addMenu() {
     showToast('添加菜单成功', 'success');
     loadMenus();
   } catch (error) {
-    showToast('添加菜单失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('添加菜单失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -159,7 +160,7 @@ async function updateMenu(menu) {
     await apiUpdateMenu(menu.id, { name: menu.name, order: menu.order });
     loadMenus();
   } catch (error) {
-    showToast('更新菜单失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('更新菜单失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -170,7 +171,7 @@ async function deleteMenu(id) {
     showToast('删除成功', 'success');
     loadMenus();
   } catch (error) {
-    showToast('删除菜单失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('删除菜单失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -178,7 +179,7 @@ async function addSubMenu(menuId) {
   const menu = menus.value.find(m => m.id === menuId);
   const subMenuName = prompt('请输入子菜单名称：');
   if (!subMenuName?.trim()) return;
-  
+
   try {
     const maxOrder = menu.subMenus?.length
       ? Math.max(...menu.subMenus.map(sm => sm.order || 0))
@@ -187,7 +188,7 @@ async function addSubMenu(menuId) {
     showToast('添加子菜单成功', 'success');
     loadMenus();
   } catch (error) {
-    showToast('添加子菜单失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('添加子菜单失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -196,7 +197,7 @@ async function updateSubMenu(subMenu) {
     await apiUpdateSubMenu(subMenu.id, { name: subMenu.name, order: subMenu.order });
     loadMenus();
   } catch (error) {
-    showToast('更新子菜单失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('更新子菜单失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -207,7 +208,7 @@ async function deleteSubMenu(id) {
     showToast('删除成功', 'success');
     loadMenus();
   } catch (error) {
-    showToast('删除子菜单失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('删除子菜单失败: ' + getErrorMessage(error), 'error');
   }
 }
 

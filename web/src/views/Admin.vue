@@ -135,12 +135,14 @@ onMounted(() => {
 });
 async function fetchLastLoginInfo() {
   try {
-    const res = await fetch('/api/users/me', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-    if (res.ok) {
-      const data = await res.json();
-      lastLoginTime.value = data.last_login_time || '';
-      lastLoginIp.value = data.last_login_ip || '';
-    }
+    const res = await fetch('/api/users/me', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    lastLoginTime.value = data.last_login_time || '';
+    lastLoginIp.value = data.last_login_ip || '';
   } catch (error) {
     console.error('获取用户信息失败:', error);
   }

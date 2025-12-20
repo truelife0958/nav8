@@ -47,7 +47,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import { getAds, addAd as apiAddAd, updateAd as apiUpdateAd, deleteAd as apiDeleteAd } from '../../api';
+import { getAds, addAd as apiAddAd, updateAd as apiUpdateAd, deleteAd as apiDeleteAd, getErrorMessage } from '../../api';
 import Toast from '../../components/Toast.vue';
 
 const leftAds = ref([]);
@@ -83,7 +83,7 @@ async function handleAddAd() {
     showToast('添加广告成功', 'success');
     loadAds();
   } catch (error) {
-    showToast('添加广告失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('添加广告失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -92,7 +92,7 @@ async function updateAd(ad) {
     await apiUpdateAd(ad.id, { position: ad.position, img: ad.img, url: ad.url });
     loadAds();
   } catch (error) {
-    showToast('更新广告失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('更新广告失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -103,7 +103,7 @@ async function deleteAd(id) {
     showToast('删除成功', 'success');
     loadAds();
   } catch (error) {
-    showToast('删除广告失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('删除广告失败: ' + getErrorMessage(error), 'error');
   }
 }
 </script>

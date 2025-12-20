@@ -33,7 +33,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import { getUserProfile, changePassword } from '../../api';
+import { getUserProfile, changePassword, getErrorMessage } from '../../api';
 
 const oldPassword = ref('');
 const newPassword = ref('');
@@ -49,6 +49,7 @@ onMounted(async () => {
     userInfo.value = response.data;
   } catch (error) {
     console.error('获取用户信息失败:', error);
+    showMessage(getErrorMessage(error), 'error');
   }
 });
 
@@ -57,20 +58,20 @@ async function handleChangePassword() {
     showMessage('请填写所有密码字段', 'error');
     return;
   }
-  
+
   if (newPassword.value !== confirmPassword.value) {
     showMessage('两次输入的新密码不一致', 'error');
     return;
   }
-  
+
   if (newPassword.value.length < 6) {
     showMessage('新密码长度至少6位', 'error');
     return;
   }
-  
+
   loading.value = true;
   message.value = '';
-  
+
   try {
     await changePassword(oldPassword.value, newPassword.value);
     showMessage('密码修改成功', 'success');
@@ -78,7 +79,7 @@ async function handleChangePassword() {
     newPassword.value = '';
     confirmPassword.value = '';
   } catch (error) {
-    showMessage(error.response?.data?.message || '密码修改失败', 'error');
+    showMessage(getErrorMessage(error), 'error');
   } finally {
     loading.value = false;
   }

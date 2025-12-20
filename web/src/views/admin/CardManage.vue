@@ -140,7 +140,8 @@ import {
   deleteCard as apiDeleteCard,
   batchDeleteCards,
   batchMoveCards,
-  importBookmarks
+  importBookmarks,
+  getErrorMessage
 } from '../../api';
 import Toast from '../../components/Toast.vue';
 
@@ -261,7 +262,7 @@ async function handleBatchDelete() {
     selectedCards.value = [];
     loadCards();
   } catch (error) {
-    showToast('批量删除失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('批量删除失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -279,7 +280,7 @@ async function handleBatchMove() {
     batchTargetSubMenuId.value = '';
     loadCards();
   } catch (error) {
-    showToast('批量移动失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('批量移动失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -302,7 +303,7 @@ async function addCard() {
     showToast('添加卡片成功', 'success');
     loadCards();
   } catch (error) {
-    showToast('添加卡片失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('添加卡片失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -319,7 +320,7 @@ async function updateCard(card) {
     });
     loadCards();
   } catch (error) {
-    showToast('更新卡片失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('更新卡片失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -330,7 +331,7 @@ async function deleteCard(id) {
     showToast('删除成功', 'success');
     loadCards();
   } catch (error) {
-    showToast('删除卡片失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('删除卡片失败: ' + getErrorMessage(error), 'error');
   }
 }
 
@@ -375,7 +376,7 @@ async function handleImport() {
     }
     await loadCards();
   } catch (error) {
-    showToast('导入失败: ' + (error.response?.data?.error || error.message), 'error');
+    showToast('导入失败: ' + getErrorMessage(error), 'error');
   } finally {
     importing.value = false;
   }
