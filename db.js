@@ -172,6 +172,19 @@ if (usePostgres) {
         )
       `);
       
+      // 确保users表有last_login_time和last_login_ip列（兼容旧表）
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_login_time') THEN
+            ALTER TABLE users ADD COLUMN last_login_time TEXT;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_login_ip') THEN
+            ALTER TABLE users ADD COLUMN last_login_ip TEXT;
+          END IF;
+        END $$;
+      `);
+      
       await pool.query(`
         CREATE TABLE IF NOT EXISTS ads (
           id SERIAL PRIMARY KEY,
