@@ -94,20 +94,33 @@
         </thead>
         <tbody>
           <tr v-for="(card, index) in cards" :key="card.id"
-              :class="{ selected: selectedCards.includes(card.id), duplicate: duplicateIds.has(card.id), 'dead-link': deadLinkIds.has(card.id), dragging: dragIndex === index }"
-              draggable="true"
-              @dragstart="onDragStart($event, index)"
+              :class="{ selected: selectedCards.includes(card.id), duplicate: duplicateIds.has(card.id), 'dead-link': deadLinkIds.has(card.id), dragging: dragIndex === index, 'drag-over': dropIndex === index && dragIndex !== index }"
               @dragover.prevent="onDragOver($event, index)"
-              @drop="onDrop($event, index)"
-              @dragend="onDragEnd">
-            <td class="drag-col"><span class="drag-handle">⋮⋮</span></td>
+              @drop="onDrop($event, index)">
+            <td class="drag-col">
+              <span class="drag-handle"
+                    draggable="true"
+                    @dragstart="onDragStart($event, index)"
+                    @dragend="onDragEnd">⋮⋮</span>
+            </td>
             <td class="checkbox-col"><input type="checkbox" :checked="selectedCards.includes(card.id)" @change="toggleSelect(card.id)" /></td>
-            <td><input v-model="card.title" @blur="updateCard(card)" class="table-input" /></td>
-            <td><input v-model="card.url" @blur="updateCard(card)" class="table-input" /></td>
-            <td><input v-model="card.logo_url" @blur="updateCard(card)" class="table-input" placeholder="logo链接(可选)" /></td>
-            <td><input v-model="card.desc" @blur="updateCard(card)" class="table-input" placeholder="描述（可选）" /></td>
-            <td><input v-model.number="card.order" type="number" @blur="updateCard(card)" class="table-input order-input" /></td>
+            <td><input v-model="card.title" @blur="updateCard(card)" class="table-input" @focus="onInputFocus" /></td>
             <td>
+              <div class="url-cell">
+                <input v-model="card.url" @blur="updateCard(card)" class="table-input" @focus="onInputFocus" />
+                <a :href="card.url" target="_blank" class="preview-link" title="预览链接" @click.stop>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
+              </div>
+            </td>
+            <td><input v-model="card.logo_url" @blur="updateCard(card)" class="table-input" placeholder="logo链接(可选)" @focus="onInputFocus" /></td>
+            <td><input v-model="card.desc" @blur="updateCard(card)" class="table-input" placeholder="描述（可选）" @focus="onInputFocus" /></td>
+            <td><input v-model.number="card.order" type="number" @blur="updateCard(card)" class="table-input order-input" @focus="onInputFocus" /></td>
+            <td class="action-col">
               <button class="btn btn-danger btn-icon" @click="deleteCard(card.id)" title="删除">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
@@ -493,18 +506,30 @@ async function deleteCard(id) {
   }
 }
 
-// 拖拽排序
+// 输入框聚焦时的处理
+function onInputFocus() {
+  // 聚焦时不做特殊处理，主要是防止拖拽
+}
+
+// 拖拽排序 - 只有拖拽手柄可以触发
 function onDragStart(e, index) {
   dragIndex.value = index;
   e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', index.toString());
 }
 
 function onDragOver(e, index) {
-  dropIndex.value = index;
+  if (dragIndex.value !== null) {
+    dropIndex.value = index;
+  }
 }
 
 async function onDrop(e, index) {
-  if (dragIndex.value === null || dragIndex.value === index) return;
+  if (dragIndex.value === null || dragIndex.value === index) {
+    dragIndex.value = null;
+    dropIndex.value = null;
+    return;
+  }
   
   const draggedCard = cards.value[dragIndex.value];
   cards.value.splice(dragIndex.value, 1);
@@ -520,6 +545,9 @@ async function onDrop(e, index) {
     showToast('排序更新失败: ' + getErrorMessage(error), 'error');
     loadCards();
   }
+  
+  dragIndex.value = null;
+  dropIndex.value = null;
 }
 
 function onDragEnd() {
@@ -657,15 +685,59 @@ async function handleImport() {
   color: #9ca3af;
   font-size: 14px;
   user-select: none;
+  padding: 8px 4px;
+  display: inline-block;
 }
 
 .drag-handle:hover {
-  color: #6b7280;
+  color: #399dff;
+  background: #f0f9ff;
+  border-radius: 4px;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 tr.dragging {
   opacity: 0.5;
   background: #e0f2fe !important;
+}
+
+tr.drag-over {
+  border-top: 2px solid #399dff;
+}
+
+/* URL单元格样式 */
+.url-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.url-cell .table-input {
+  flex: 1;
+}
+
+.preview-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #6b7280;
+  border-radius: 4px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.preview-link:hover {
+  color: #399dff;
+  background: #f0f9ff;
+}
+
+.action-col {
+  text-align: center;
 }
 
 .card-table th:nth-child(1), /* 拖拽列 */
@@ -819,7 +891,7 @@ tr.dragging {
   background: #4b5563;
 }
 
-/* 批量操作栏 - sticky 跟随滚动 */
+/* 批量操作栏 - 固定浮动 */
 .batch-actions {
   display: flex;
   align-items: center;
@@ -828,12 +900,15 @@ tr.dragging {
   background: #fef3c7;
   border: 1px solid #f59e0b;
   border-radius: 8px;
-  margin-bottom: 16px;
   width: 95%;
   flex-wrap: wrap;
-  position: sticky;
-  top: 64px;
-  z-index: 50;
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 1140px;
+  z-index: 100;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
 }
 
 .selected-count {

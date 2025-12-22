@@ -229,4 +229,56 @@ router.delete('/submenus/:id', auth, async (req, res) => {
   }
 });
 
+// 批量更新菜单排序
+router.post('/batch/reorder', auth, async (req, res) => {
+  const { orders } = req.body;
+  
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return res.status(400).json({ error: '无效的排序数据' });
+  }
+  
+  // 验证每个排序项
+  for (const item of orders) {
+    if (!isPositiveInteger(item.id) || !isNonNegativeInteger(item.order)) {
+      return res.status(400).json({ error: '无效的排序数据格式' });
+    }
+  }
+  
+  try {
+    for (const item of orders) {
+      await db.run('UPDATE menus SET "order" = ? WHERE id = ?', [Number(item.order), Number(item.id)]);
+    }
+    return res.json({ updated: orders.length });
+  } catch (err) {
+    console.error('批量更新菜单排序失败:', err);
+    return res.status(500).json({ error: '排序更新失败' });
+  }
+});
+
+// 批量更新子菜单排序
+router.post('/submenus/batch/reorder', auth, async (req, res) => {
+  const { orders } = req.body;
+  
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return res.status(400).json({ error: '无效的排序数据' });
+  }
+  
+  // 验证每个排序项
+  for (const item of orders) {
+    if (!isPositiveInteger(item.id) || !isNonNegativeInteger(item.order)) {
+      return res.status(400).json({ error: '无效的排序数据格式' });
+    }
+  }
+  
+  try {
+    for (const item of orders) {
+      await db.run('UPDATE sub_menus SET "order" = ? WHERE id = ?', [Number(item.order), Number(item.id)]);
+    }
+    return res.json({ updated: orders.length });
+  } catch (err) {
+    console.error('批量更新子菜单排序失败:', err);
+    return res.status(500).json({ error: '排序更新失败' });
+  }
+});
+
 module.exports = router;

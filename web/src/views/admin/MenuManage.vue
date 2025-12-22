@@ -18,10 +18,19 @@
     
     <div class="menu-content">
       <div class="menu-list">
-        <div v-for="menu in menus" :key="menu.id" class="menu-item">
+        <div v-for="(menu, index) in menus" :key="menu.id"
+             class="menu-item"
+             :class="{ 'dragging': menuDragIndex === index, 'drag-over': menuDropIndex === index && menuDragIndex !== index }"
+             @dragover.prevent="onMenuDragOver($event, index)"
+             @drop="onMenuDrop($event, index)">
           <!-- 主菜单 -->
           <div class="main-menu">
             <div class="menu-info">
+              <span class="menu-drag-handle"
+                    draggable="true"
+                    @dragstart="onMenuDragStart($event, index)"
+                    @dragend="onMenuDragEnd"
+                    title="拖拽排序">⋮⋮</span>
               <div class="menu-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 3h18v18H3zM9 9h6v6H9z"/>
@@ -69,8 +78,17 @@
             </div>
             
             <div class="sub-menu-list" v-if="menu.subMenus && menu.subMenus.length > 0">
-              <div v-for="subMenu in menu.subMenus" :key="subMenu.id" class="sub-menu-item">
+              <div v-for="(subMenu, subIndex) in menu.subMenus" :key="subMenu.id"
+                   class="sub-menu-item"
+                   :class="{ 'dragging': subMenuDragData?.menuId === menu.id && subMenuDragData?.index === subIndex, 'drag-over': subMenuDropData?.menuId === menu.id && subMenuDropData?.index === subIndex && !(subMenuDragData?.menuId === menu.id && subMenuDragData?.index === subIndex) }"
+                   @dragover.prevent="onSubMenuDragOver($event, menu.id, subIndex)"
+                   @drop="onSubMenuDrop($event, menu.id, subIndex)">
                 <div class="sub-menu-info">
+                  <span class="sub-menu-drag-handle"
+                        draggable="true"
+                        @dragstart="onSubMenuDragStart($event, menu.id, subIndex)"
+                        @dragend="onSubMenuDragEnd"
+                        title="拖拽排序">⋮⋮</span>
                   <div class="sub-menu-icon">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M4 6h16M4 12h16M4 18h16"/>
@@ -113,6 +131,8 @@ import {
   addSubMenu as apiAddSubMenu,
   updateSubMenu as apiUpdateSubMenu,
   deleteSubMenu as apiDeleteSubMenu,
+  batchReorderMenus,
+  batchReorderSubMenus,
   getErrorMessage
 } from '../../api';
 import Toast from '../../components/Toast.vue';
@@ -122,6 +142,14 @@ const newMenuName = ref('');
 
 // Toast提示
 const toast = ref({ show: false, message: '', type: 'info' });
+
+// 主菜单拖拽相关
+const menuDragIndex = ref(null);
+const menuDropIndex = ref(null);
+
+// 子菜单拖拽相关
+const subMenuDragData = ref(null);
+const subMenuDropData = ref(null);
 
 function showToast(message, type = 'info') {
   toast.value = { show: true, message, type };
@@ -228,6 +256,97 @@ function toggleSubMenu(menuId) {
     menu.showSubMenu = !menu.showSubMenu;
   }
 }
+
+// 主菜单拖拽排序
+function onMenuDragStart(e, index) {
+  menuDragIndex.value = index;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', `menu-${index}`);
+}
+
+function onMenuDragOver(e, index) {
+  if (menuDragIndex.value !== null) {
+    menuDropIndex.value = index;
+  }
+}
+
+async function onMenuDrop(e, index) {
+  if (menuDragIndex.value === null || menuDragIndex.value === index) {
+    menuDragIndex.value = null;
+    menuDropIndex.value = null;
+    return;
+  }
+  
+  const draggedMenu = menus.value[menuDragIndex.value];
+  menus.value.splice(menuDragIndex.value, 1);
+  menus.value.splice(index, 0, draggedMenu);
+  
+  // 更新排序值
+  const orders = menus.value.map((menu, i) => ({ id: menu.id, order: i }));
+  try {
+    await batchReorderMenus(orders);
+    menus.value.forEach((menu, i) => menu.order = i);
+    showToast('菜单排序已更新', 'success');
+  } catch (error) {
+    showToast('排序更新失败: ' + getErrorMessage(error), 'error');
+    loadMenus();
+  }
+  
+  menuDragIndex.value = null;
+  menuDropIndex.value = null;
+}
+
+function onMenuDragEnd() {
+  menuDragIndex.value = null;
+  menuDropIndex.value = null;
+}
+
+// 子菜单拖拽排序
+function onSubMenuDragStart(e, menuId, index) {
+  subMenuDragData.value = { menuId, index };
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', `submenu-${menuId}-${index}`);
+}
+
+function onSubMenuDragOver(e, menuId, index) {
+  if (subMenuDragData.value !== null && subMenuDragData.value.menuId === menuId) {
+    subMenuDropData.value = { menuId, index };
+  }
+}
+
+async function onSubMenuDrop(e, menuId, index) {
+  if (!subMenuDragData.value || subMenuDragData.value.menuId !== menuId || subMenuDragData.value.index === index) {
+    subMenuDragData.value = null;
+    subMenuDropData.value = null;
+    return;
+  }
+  
+  const menu = menus.value.find(m => m.id === menuId);
+  if (!menu || !menu.subMenus) return;
+  
+  const draggedSubMenu = menu.subMenus[subMenuDragData.value.index];
+  menu.subMenus.splice(subMenuDragData.value.index, 1);
+  menu.subMenus.splice(index, 0, draggedSubMenu);
+  
+  // 更新排序值
+  const orders = menu.subMenus.map((subMenu, i) => ({ id: subMenu.id, order: i }));
+  try {
+    await batchReorderSubMenus(orders);
+    menu.subMenus.forEach((subMenu, i) => subMenu.order = i);
+    showToast('子菜单排序已更新', 'success');
+  } catch (error) {
+    showToast('排序更新失败: ' + getErrorMessage(error), 'error');
+    loadMenus();
+  }
+  
+  subMenuDragData.value = null;
+  subMenuDropData.value = null;
+}
+
+function onSubMenuDragEnd() {
+  subMenuDragData.value = null;
+  subMenuDropData.value = null;
+}
 </script>
 
 <style scoped>
@@ -299,6 +418,15 @@ function toggleSubMenu(menuId) {
   background: #f8fafc;
 }
 
+.menu-item.dragging {
+  opacity: 0.5;
+  background: #e0f2fe !important;
+}
+
+.menu-item.drag-over {
+  border-top: 3px solid #667eea;
+}
+
 .main-menu {
   display: flex;
   align-items: center;
@@ -313,6 +441,27 @@ function toggleSubMenu(menuId) {
   align-items: center;
   gap: 16px;
   flex: 1;
+}
+
+/* 主菜单拖拽手柄 */
+.menu-drag-handle {
+  cursor: grab;
+  color: #9ca3af;
+  font-size: 16px;
+  user-select: none;
+  padding: 8px 4px;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.menu-drag-handle:hover {
+  color: #667eea;
+  background: #f0f4ff;
+  border-radius: 4px;
+}
+
+.menu-drag-handle:active {
+  cursor: grabbing;
 }
 
 .menu-icon {
@@ -458,11 +607,40 @@ function toggleSubMenu(menuId) {
   margin-bottom: 0;
 }
 
+.sub-menu-item.dragging {
+  opacity: 0.5;
+  background: #d1fae5 !important;
+}
+
+.sub-menu-item.drag-over {
+  border-top: 3px solid #10b981;
+}
+
 .sub-menu-info {
   display: flex;
   align-items: center;
   gap: 12px;
   flex: 1;
+}
+
+/* 子菜单拖拽手柄 */
+.sub-menu-drag-handle {
+  cursor: grab;
+  color: #9ca3af;
+  font-size: 14px;
+  user-select: none;
+  padding: 6px 4px;
+  display: inline-block;
+}
+
+.sub-menu-drag-handle:hover {
+  color: #10b981;
+  background: #ecfdf5;
+  border-radius: 4px;
+}
+
+.sub-menu-drag-handle:active {
+  cursor: grabbing;
 }
 
 .sub-menu-icon {

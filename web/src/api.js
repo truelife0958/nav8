@@ -81,6 +81,10 @@ export const addSubMenu = (menuId, data) => api.post(`/menus/${menuId}/submenus`
 export const updateSubMenu = (id, data) => api.put(`/menus/submenus/${id}`, data);
 export const deleteSubMenu = (id) => api.delete(`/menus/submenus/${id}`);
 
+// 菜单批量排序API
+export const batchReorderMenus = (orders) => api.post('/menus/batch/reorder', { orders });
+export const batchReorderSubMenus = (orders) => api.post('/menus/submenus/batch/reorder', { orders });
+
 // 卡片相关API
 export const getCards = (menuId, subMenuId = null) => {
   const params = subMenuId ? { subMenuId } : {};
