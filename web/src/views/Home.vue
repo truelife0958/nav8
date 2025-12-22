@@ -76,6 +76,12 @@
     <div v-if="currentSubMenus.length > 0 && !isSearching" class="sub-menu-section">
       <div class="sub-menu-scroll">
         <button
+          @click="selectMainCategory"
+          :class="['sub-menu-btn', { active: activeSubMenu === null }]"
+        >
+          常用访问
+        </button>
+        <button
           v-for="subMenu in currentSubMenus"
           :key="subMenu.id"
           @click="selectSubMenu(subMenu)"
@@ -317,10 +323,8 @@ onMounted(async () => {
     menus.value = res.data;
     if (menus.value.length) {
       activeMenu.value = menus.value[0];
-      // 如果有子菜单，默认选中第一个子菜单
-      if (activeMenu.value.subMenus && activeMenu.value.subMenus.length > 0) {
-        activeSubMenu.value = activeMenu.value.subMenus[0];
-      }
+      // 默认显示主菜单下的卡片（常用访问）
+      activeSubMenu.value = null;
       await loadCards();
     }
   } catch (error) {
@@ -358,12 +362,8 @@ async function selectMenu(menu, parentMenu = null) {
     activeSubMenu.value = menu;
   } else {
     activeMenu.value = menu;
-    // 如果有子菜单，默认选中第一个子菜单
-    if (menu.subMenus && menu.subMenus.length > 0) {
-      activeSubMenu.value = menu.subMenus[0];
-    } else {
-      activeSubMenu.value = null;
-    }
+    // 默认显示主菜单下的卡片（常用访问）
+    activeSubMenu.value = null;
   }
   await loadCards();
 }
@@ -372,6 +372,13 @@ async function selectMenu(menu, parentMenu = null) {
 async function selectSubMenu(subMenu) {
   exitSearch();
   activeSubMenu.value = subMenu;
+  await loadCards();
+}
+
+// 选择主分类（常用访问）
+async function selectMainCategory() {
+  exitSearch();
+  activeSubMenu.value = null;
   await loadCards();
 }
 
@@ -622,7 +629,7 @@ async function handleSearch() {
   position: relative;
   z-index: 2;
   width: 100%;
-  max-width: 1200px;
+  max-width: 55rem;
   margin: 0 auto;
   padding: 0 1rem;
 }
