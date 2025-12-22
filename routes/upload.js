@@ -36,23 +36,31 @@ const upload = multer({
   }
 });
 
-router.post('/', auth, upload.single('logo'), (req, res) => {
-  if (!req.file) return res.status(400).json({error: 'No file uploaded'});
-  res.json({ filename: req.file.filename, url: '/uploads/' + req.file.filename });
-});
-
-// 错误处理中间件
-router.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ error: '文件大小不能超过5MB' });
+// 使用 async/await 包装 upload.single 虽然它本身是中间件
+// 这里主要是为了保持一致性，但 multer 是标准中间件，直接用也行
+// 我们可以保留原来的结构，但确保错误返回 JSON
+router.post('/', auth, (req, res, next) => {
+  upload.single('logo')(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: '文件大小不能超过5MB' });
+        }
+        return res.status(400).json({ error: err.message });
+      }
+      return res.status(400).json({ error: err.message });
     }
-    return res.status(400).json({ error: err.message });
-  }
-  if (err) {
-    return res.status(400).json({ error: err.message });
-  }
-  next();
+    
+    if (!req.file) {
+      return res.status(400).json({ error: '请上传文件' });
+    }
+    
+    res.json({ 
+      filename: req.file.filename, 
+      url: '/uploads/' + req.file.filename,
+      success: true
+    });
+  });
 });
 
-module.exports = router; 
+module.exports = router;

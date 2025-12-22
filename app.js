@@ -2,6 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
+
+const db = require('./db');
+
 const menuRoutes = require('./routes/menu');
 const cardRoutes = require('./routes/card');
 const uploadRoutes = require('./routes/upload');
@@ -11,7 +15,8 @@ const friendRoutes = require('./routes/friend');
 const userRoutes = require('./routes/user');
 const importRoutes = require('./routes/import');
 const backupRoutes = require('./routes/backup');
-const compression = require('compression');
+const statsRoutes = require('./routes/stats');
+
 const app = express();
 
 // 信任反向代理（Zeabur/Nginx等）
@@ -35,7 +40,7 @@ app.use((req, res, next) => {
 // 请求频率限制 - 通用API限制
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
-  max: 200, // 每个IP最多200次请求
+  max: 300, // 每个IP最多300次请求 (适当放宽，避免误伤)
   message: { error: '请求过于频繁，请稍后再试' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -54,7 +59,7 @@ const loginLimiter = rateLimit({
 // 写操作限制（POST/PUT/DELETE）
 const writeLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1分钟
-  max: 30, // 每分钟最多30次写操作
+  max: 60, // 每分钟最多60次写操作 (适当放宽)
   message: { error: '操作过于频繁，请稍后再试' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -66,8 +71,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(compression());
 
 // 应用请求频率限制
@@ -102,6 +107,7 @@ app.use('/api/friends', friendRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/stats', statsRoutes);
 
 // SPA路由处理 - 所有非API和非静态文件请求返回index.html
 app.get('*', (req, res, next) => {
@@ -120,9 +126,35 @@ app.use((req, res, next) => {
 // 全局错误处理中间件
 app.use((err, req, res, next) => {
   console.error('服务器错误:', err);
-  res.status(500).json({ error: '服务器内部错误', message: err.message });
+  
+  // Multer 错误处理
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: '文件大小超过限制' });
+  }
+  
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: '请求数据过大' });
+  }
+
+  res.status(500).json({ error: '服务器内部错误', message: process.env.NODE_ENV === 'development' ? err.message : undefined });
 });
 
-app.listen(PORT, () => {
-  console.log(`server is running at http://localhost:${PORT}`);
-});
+async function start() {
+  try {
+    await db.init();
+
+    const server = app.listen(PORT, () => {
+      console.log(`server is running at http://localhost:${PORT}`);
+    });
+
+    server.on('error', (err) => {
+      console.error('服务器启动失败:', err);
+      process.exit(1);
+    });
+  } catch (err) {
+    console.error('数据库初始化失败:', err);
+    process.exit(1);
+  }
+}
+
+start();

@@ -49,7 +49,16 @@ async function handleExport() {
   message.value = '';
   try {
     const res = await exportBackup();
-    const blob = new Blob([JSON.stringify(JSON.parse(await res.data.text()), null, 2)], { type: 'application/json' });
+    // res.data 已经是 Blob 类型（因为设置了 responseType: 'blob'）
+    let jsonData;
+    if (res.data instanceof Blob) {
+      const text = await res.data.text();
+      jsonData = JSON.parse(text);
+    } else {
+      // 如果不是 Blob，直接使用
+      jsonData = res.data;
+    }
+    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

@@ -1,4 +1,5 @@
 import axios from 'axios';
+
 const BASE = '/api';
 
 // 创建axios实例
@@ -45,10 +46,13 @@ api.interceptors.response.use(
   error => {
     // 处理401未授权
     if (error.response?.status === 401) {
-      const currentPath = window.location.pathname;
-      if (currentPath.startsWith('/admin')) {
-        localStorage.removeItem('token');
-        window.location.reload();
+      // 避免无限循环刷新，只有在非登录页面且确实有 token 时才处理
+      // 或者交给组件处理重定向
+      const token = localStorage.getItem('token');
+      if (token) {
+         localStorage.removeItem('token');
+         // 可以选择触发一个事件或者让前端路由守卫处理
+         // window.location.reload(); // 简单粗暴的处理
       }
     }
     // 添加友好错误消息
@@ -60,58 +64,65 @@ api.interceptors.response.use(
 // 导出错误消息提取函数供组件使用
 export { getErrorMessage };
 
-export const login = (username, password) => api.post('/login', { username, password });
+// --- API 方法定义 ---
+// 由于拦截器已处理 Token，无需手动传递 headers
 
-function authHeaders() {
-  const token = localStorage.getItem('token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+export const login = (username, password) => api.post('/login', { username, password });
 
 // 菜单相关API
 export const getMenus = () => api.get('/menus');
-export const addMenu = (data) => api.post('/menus', data, { headers: authHeaders() });
-export const updateMenu = (id, data) => api.put(`/menus/${id}`, data, { headers: authHeaders() });
-export const deleteMenu = (id) => api.delete(`/menus/${id}`, { headers: authHeaders() });
+export const addMenu = (data) => api.post('/menus', data);
+export const updateMenu = (id, data) => api.put(`/menus/${id}`, data);
+export const deleteMenu = (id) => api.delete(`/menus/${id}`);
 
 // 子菜单相关API
 export const getSubMenus = (menuId) => api.get(`/menus/${menuId}/submenus`);
-export const addSubMenu = (menuId, data) => api.post(`/menus/${menuId}/submenus`, data, { headers: authHeaders() });
-export const updateSubMenu = (id, data) => api.put(`/menus/submenus/${id}`, data, { headers: authHeaders() });
-export const deleteSubMenu = (id) => api.delete(`/menus/submenus/${id}`, { headers: authHeaders() });
+export const addSubMenu = (menuId, data) => api.post(`/menus/${menuId}/submenus`, data);
+export const updateSubMenu = (id, data) => api.put(`/menus/submenus/${id}`, data);
+export const deleteSubMenu = (id) => api.delete(`/menus/submenus/${id}`);
 
 // 卡片相关API
 export const getCards = (menuId, subMenuId = null) => {
   const params = subMenuId ? { subMenuId } : {};
   return api.get(`/cards/${menuId}`, { params });
 };
-export const addCard = (data) => api.post('/cards', data, { headers: authHeaders() });
-export const updateCard = (id, data) => api.put(`/cards/${id}`, data, { headers: authHeaders() });
-export const deleteCard = (id) => api.delete(`/cards/${id}`, { headers: authHeaders() });
-export const batchDeleteCards = (ids) => api.post('/cards/batch/delete', { ids }, { headers: authHeaders() });
-export const batchMoveCards = (ids, menu_id, sub_menu_id) => api.post('/cards/batch/move', { ids, menu_id, sub_menu_id }, { headers: authHeaders() });
+
+// 搜索卡片
+export const searchCards = (q) => api.get('/cards/search/query', { params: { q } });
+
+export const addCard = (data) => api.post('/cards', data);
+export const updateCard = (id, data) => api.put(`/cards/${id}`, data);
+export const deleteCard = (id) => api.delete(`/cards/${id}`);
+export const batchDeleteCards = (ids) => api.post('/cards/batch/delete', { ids });
+export const batchMoveCards = (ids, menu_id, sub_menu_id) => api.post('/cards/batch/move', { ids, menu_id, sub_menu_id });
+export const checkDeadLinks = (ids) => api.post('/cards/batch/check-links', { ids });
+export const batchReorderCards = (orders) => api.post('/cards/batch/reorder', { orders });
 
 export const uploadLogo = (file) => {
   const formData = new FormData();
   formData.append('logo', file);
-  return api.post('/upload', formData, { headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' } });
+  return api.post('/upload', formData, { 
+    headers: { 'Content-Type': 'multipart/form-data' } 
+    // Authorization headers are handled by interceptor
+  });
 };
 
 // 广告API
 export const getAds = () => api.get('/ads');
-export const addAd = (data) => api.post('/ads', data, { headers: authHeaders() });
-export const updateAd = (id, data) => api.put(`/ads/${id}`, data, { headers: authHeaders() });
-export const deleteAd = (id) => api.delete(`/ads/${id}`, { headers: authHeaders() });
+export const addAd = (data) => api.post('/ads', data);
+export const updateAd = (id, data) => api.put(`/ads/${id}`, data);
+export const deleteAd = (id) => api.delete(`/ads/${id}`);
 
 // 友链API
 export const getFriends = () => api.get('/friends');
-export const addFriend = (data) => api.post('/friends', data, { headers: authHeaders() });
-export const updateFriend = (id, data) => api.put(`/friends/${id}`, data, { headers: authHeaders() });
-export const deleteFriend = (id) => api.delete(`/friends/${id}`, { headers: authHeaders() });
+export const addFriend = (data) => api.post('/friends', data);
+export const updateFriend = (id, data) => api.put(`/friends/${id}`, data);
+export const deleteFriend = (id) => api.delete(`/friends/${id}`);
 
 // 用户API
-export const getUserProfile = () => api.get('/users/profile', { headers: authHeaders() });
-export const changePassword = (oldPassword, newPassword) => api.put('/users/password', { oldPassword, newPassword }, { headers: authHeaders() });
-export const getUsers = () => api.get('/users', { headers: authHeaders() });
+export const getUserProfile = () => api.get('/users/profile');
+export const changePassword = (oldPassword, newPassword) => api.put('/users/password', { oldPassword, newPassword });
+export const getUsers = () => api.get('/users');
 
 // 导入API
 export const importBookmarks = (file, menuId, subMenuId) => {
@@ -119,9 +130,15 @@ export const importBookmarks = (file, menuId, subMenuId) => {
   formData.append('file', file);
   formData.append('menu_id', menuId);
   if (subMenuId) formData.append('sub_menu_id', subMenuId);
-  return api.post('/import', formData, { headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' } });
+  return api.post('/import', formData, { 
+    headers: { 'Content-Type': 'multipart/form-data' } 
+  });
 };
 
 // 备份API
-export const exportBackup = () => api.get('/backup/export', { headers: authHeaders(), responseType: 'blob' });
-export const importBackup = (data, overwrite = false) => api.post('/backup/import', { data, overwrite }, { headers: authHeaders() });
+export const exportBackup = () => api.get('/backup/export', { responseType: 'blob' });
+export const importBackup = (data, overwrite = false) => api.post('/backup/import', { data, overwrite });
+
+// 统计API
+export const recordVisit = () => api.post('/stats/visit');
+export const getStatsSummary = () => api.get('/stats/summary');

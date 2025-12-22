@@ -66,8 +66,10 @@ onMounted(loadAds);
 
 async function loadAds() {
   const res = await getAds();
-  leftAds.value = res.data.filter(ad => ad.position === 'left');
-  rightAds.value = res.data.filter(ad => ad.position === 'right');
+  // API 返回的可能是数组或包含 data 的对象
+  const ads = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+  leftAds.value = ads.filter(ad => ad.position === 'left');
+  rightAds.value = ads.filter(ad => ad.position === 'right');
 }
 
 async function handleAddAd() {

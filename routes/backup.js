@@ -6,19 +6,13 @@ const router = express.Router();
 // 导出所有数据
 router.get('/export', auth, async (req, res) => {
   try {
-    const getData = (table) => new Promise((resolve, reject) => {
-      db.all(`SELECT * FROM ${table}`, [], (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
-
+    // 并行获取所有表数据
     const [menus, sub_menus, cards, ads, friends] = await Promise.all([
-      getData('menus'),
-      getData('sub_menus'),
-      getData('cards'),
-      getData('ads'),
-      getData('friends')
+      db.all('SELECT * FROM menus'),
+      db.all('SELECT * FROM sub_menus'),
+      db.all('SELECT * FROM cards'),
+      db.all('SELECT * FROM ads'),
+      db.all('SELECT * FROM friends')
     ]);
 
     const backup = {
@@ -42,19 +36,12 @@ router.post('/import', auth, express.json({ limit: '50mb' }), async (req, res) =
   if (!data) return res.status(400).json({ error: '无效的备份数据' });
 
   try {
-    const runQuery = (sql, params = []) => new Promise((resolve, reject) => {
-      db.run(sql, params, function(err) {
-        if (err) reject(err);
-        else resolve(this);
-      });
-    });
-
     if (overwrite) {
-      await runQuery('DELETE FROM cards');
-      await runQuery('DELETE FROM sub_menus');
-      await runQuery('DELETE FROM menus');
-      await runQuery('DELETE FROM ads');
-      await runQuery('DELETE FROM friends');
+      await db.run('DELETE FROM cards');
+      await db.run('DELETE FROM sub_menus');
+      await db.run('DELETE FROM menus');
+      await db.run('DELETE FROM ads');
+      await db.run('DELETE FROM friends');
     }
 
     let imported = { menus: 0, sub_menus: 0, cards: 0, ads: 0, friends: 0 };
@@ -64,14 +51,14 @@ router.post('/import', auth, express.json({ limit: '50mb' }), async (req, res) =
     const subMenuIdMap = new Map();
 
     for (const menu of (data.menus || [])) {
-      const result = await runQuery('INSERT INTO menus (name, "order") VALUES (?, ?)', [menu.name, menu.order || 0]);
+      const result = await db.run('INSERT INTO menus (name, "order") VALUES (?, ?)', [menu.name, menu.order || 0]);
       menuIdMap.set(menu.id, result.lastID);
       imported.menus++;
     }
 
     for (const sub of (data.sub_menus || [])) {
       const newParentId = menuIdMap.get(sub.parent_id) || sub.parent_id;
-      const result = await runQuery('INSERT INTO sub_menus (parent_id, name, "order") VALUES (?, ?, ?)',
+      const result = await db.run('INSERT INTO sub_menus (parent_id, name, "order") VALUES (?, ?, ?)',
         [newParentId, sub.name, sub.order || 0]);
       subMenuIdMap.set(sub.id, result.lastID);
       imported.sub_menus++;
@@ -85,7 +72,7 @@ router.post('/import', auth, express.json({ limit: '50mb' }), async (req, res) =
         ? 'INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING'
         : 'INSERT OR IGNORE INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
 
-      await runQuery(
+      await db.run(
         insertCardSql,
         [newMenuId, newSubMenuId, card.title, card.url, card.logo_url || '', card.custom_logo_path || '', card.desc || '', card.order || 0]
       );
@@ -93,12 +80,12 @@ router.post('/import', auth, express.json({ limit: '50mb' }), async (req, res) =
     }
 
     for (const ad of (data.ads || [])) {
-      await runQuery('INSERT INTO ads (position, img, url) VALUES (?, ?, ?)', [ad.position, ad.img, ad.url]);
+      await db.run('INSERT INTO ads (position, img, url) VALUES (?, ?, ?)', [ad.position, ad.img, ad.url]);
       imported.ads++;
     }
 
     for (const friend of (data.friends || [])) {
-      await runQuery('INSERT INTO friends (title, url, logo) VALUES (?, ?, ?)', [friend.title, friend.url, friend.logo || '']);
+      await db.run('INSERT INTO friends (title, url, logo) VALUES (?, ?, ?)', [friend.title, friend.url, friend.logo || '']);
       imported.friends++;
     }
 

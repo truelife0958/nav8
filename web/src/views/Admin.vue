@@ -2,39 +2,40 @@
   <div v-if="!isLoggedIn" class="login-container">
     <div class="login-card">
       <h2 class="login-title">后台管理登录</h2>
-      <div class="login-form">
-        <input v-model="username" type="text" placeholder="用户名" class="login-input" @keyup.enter="handleLogin" />
+      <form class="login-form" @submit.prevent="handleLogin">
+        <input v-model="username" type="text" placeholder="用户名" class="login-input" autocomplete="username" />
         <div class="password-input-wrapper">
           <input
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
             placeholder="密码"
             class="login-input password-input"
-            @keyup.enter="handleLogin"
+            autocomplete="current-password"
           />
-          <span class="toggle-password" @click="showPassword = !showPassword">
+          <button type="button" class="toggle-password" @click="showPassword = !showPassword" aria-label="切换密码可见">
             <svg v-if="showPassword" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2566d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg v-else width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2566d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.77 21.77 0 0 1 5.06-6.06"/><path d="M1 1l22 22"/><path d="M9.53 9.53A3 3 0 0 0 12 15a3 3 0 0 0 2.47-5.47"/></svg>
-          </span>
+          </button>
         </div>
         <div class="login-buttons">
-          <button @click="goHome" class="back-btn">
+          <button type="button" @click="goHome" class="back-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 19l-7-7 7-7"/>
             </svg>
             返回首页
           </button>
-          <button @click="handleLogin" class="login-btn" :disabled="loading">
+          <button type="submit" class="login-btn" :disabled="loading">
             {{ loading ? '登录中...' : '登录' }}
           </button>
         </div>
         <p v-if="loginError" class="login-error">{{ loginError }}</p>
-      </div>
+      </form>
     </div>
   </div>
   
   <div v-else class="admin-layout">
-    <aside class="admin-sider" :class="{ open: siderOpen }" @click.self="closeSider">
+    <div v-if="siderOpen" class="sidebar-overlay" @click="closeSider"></div>
+    <aside class="admin-sider" :class="{ open: siderOpen }">
       <div class="logo clickable" @click="page='welcome'; closeSider()">Admin</div>
       <ul class="menu-list">
         <li :class="{active: page==='menu'}" @click="page='menu'; closeSider()">栏目管理</li>
@@ -42,6 +43,7 @@
         <li :class="{active: page==='ad'}" @click="page='ad'; closeSider()">广告管理</li>
         <li :class="{active: page==='friend'}" @click="page='friend'; closeSider()">友链管理</li>
         <li :class="{active: page==='user'}" @click="page='user'; closeSider()">用户管理</li>
+        <li :class="{active: page==='stats'}" @click="page='stats'; closeSider()">访问统计</li>
         <li :class="{active: page==='backup'}" @click="page='backup'; closeSider()">数据备份</li>
       </ul>
     </aside>
@@ -83,6 +85,7 @@
         <AdManage v-if="page==='ad'" />
         <FriendLinkManage v-if="page==='friend'" />
         <UserManage v-if="page==='user'" />
+        <StatsManage v-if="page==='stats'" />
         <BackupManage v-if="page==='backup'" />
       </div>
       <footer class="admin-footer">
@@ -94,12 +97,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { login, getErrorMessage } from '../api';
+import { login, getErrorMessage, getUserProfile } from '../api';
 import MenuManage from './admin/MenuManage.vue';
 import CardManage from './admin/CardManage.vue';
 import AdManage from './admin/AdManage.vue';
 import FriendLinkManage from './admin/FriendLinkManage.vue';
 import UserManage from './admin/UserManage.vue';
+import StatsManage from './admin/StatsManage.vue';
 import BackupManage from './admin/BackupManage.vue';
 
 const page = ref('welcome');
@@ -120,6 +124,7 @@ const pageTitle = computed(() => {
     case 'ad': return '广告管理';
     case 'friend': return '友链管理';
     case 'user': return '用户管理';
+    case 'stats': return '访问统计';
     case 'backup': return '数据备份';
     default: return '';
   }
@@ -135,16 +140,18 @@ onMounted(() => {
 });
 async function fetchLastLoginInfo() {
   try {
-    const res = await fetch('/api/users/me', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-    });
-    if (!res.ok) return;
-
-    const data = await res.json();
-    lastLoginTime.value = data.last_login_time || '';
-    lastLoginIp.value = data.last_login_ip || '';
+    const res = await getUserProfile();
+    // API 返回 { id, username, last_login_time, last_login_ip }
+    if (res.data) {
+      lastLoginTime.value = res.data.last_login_time || '';
+      lastLoginIp.value = res.data.last_login_ip || '';
+    }
   } catch (error) {
     console.error('获取用户信息失败:', error);
+    // 如果 token 失效，自动登出
+    if (error.response?.status === 401) {
+      logout();
+    }
   }
 }
 
@@ -323,6 +330,7 @@ function closeSider() {
   left: 0;
   height: 100vh;
   z-index: 100;
+  transition: transform 0.3s;
 }
 .logo {
   font-size: 2rem;
@@ -379,7 +387,7 @@ function closeSider() {
   top: 0;
   left: 180px;
   right: 0;
-  z-index: 101;
+  z-index: 99; /* Lower than sider */
   border-bottom: 1px solid #e3e6ef;
 }
 .header-title {
@@ -538,6 +546,9 @@ function closeSider() {
   font-weight: 600;
   letter-spacing: 1px;
 }
+.sidebar-overlay {
+  display: none;
+}
 @media (max-width: 900px) {
   .welcome-cards {
     flex-direction: column;
@@ -552,20 +563,24 @@ function closeSider() {
 }
 @media (max-width: 768px) {
   .admin-sider {
-    position: fixed;
-    left: 0;
-    top: 0;
+    transform: translateX(-100%);
+    z-index: 200;
     width: 70vw;
     max-width: 260px;
-    height: 100vh;
-    z-index: 200;
-    transform: translateX(-100%);
-    transition: transform 0.3s;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.12);
-    background: #fff;
   }
   .admin-sider.open {
     transform: translateX(0);
+    box-shadow: 2px 0 12px rgba(0,0,0,0.15);
+  }
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 150;
   }
   .admin-main {
     padding: 64px 0 0 0 !important;
@@ -573,31 +588,20 @@ function closeSider() {
   .admin-header {
     left: 0 !important;
     width: 100vw !important;
-    min-width: 0 !important;
-    padding: 0 8px 0 8px !important;
+    padding: 0 8px !important;
     box-sizing: border-box;
-    flex-wrap: nowrap;
-    height: 56px;
+    justify-content: space-between;
   }
   .header-title {
     font-size: 1.1rem !important;
     margin-left: 0 !important;
     text-align: left !important;
-    width: auto !important;
-    flex: 1 1 auto;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    letter-spacing: 1px;
   }
   .header-actions {
-    gap: 4px;
     margin-left: 0;
-  }
-  .btn.logout-btn {
-    padding: 4px 8px;
-    font-size: 13px;
-    border-radius: 8px;
   }
   .menu-toggle {
     display: inline-flex !important;
@@ -608,10 +612,9 @@ function closeSider() {
     margin-right: 4px !important;
     background: none;
     border: none;
-    font-size: 2rem;
+    font-size: 1.5rem;
     cursor: pointer;
     color: #2566d8;
-    z-index: 300;
   }
   /* 表单和按钮间距优化 */
   .input, .btn {
@@ -621,4 +624,4 @@ function closeSider() {
 .menu-toggle {
   display: none;
 }
-</style> 
+</style>

@@ -35,7 +35,10 @@
             </div>
             <div class="menu-actions">
               <button class="btn btn-icon expand-btn" @click="toggleSubMenu(menu.id)" :title="menu.showSubMenu ? '收起子菜单' : '展开子菜单'">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg v-if="menu.showSubMenu" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m18 15-6-6-6 6"/>
+                </svg>
+                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="m6 9 6 6 6-6"/>
                 </svg>
               </button>
@@ -90,9 +93,6 @@
             </div>
             
             <div v-else class="empty-sub-menu">
-              <!-- <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-              <path d="M9 11H1l8-8 8 8h-8v8z"/>
-              </svg> -->
               <p>暂无子菜单</p>
               <button class="btn btn-sm btn-outline" @click="addSubMenu(menu.id)">添加第一个子菜单</button>
             </div>
@@ -131,9 +131,15 @@ onMounted(loadMenus);
 
 async function loadMenus() {
   const res = await getMenus();
+  // 保留现有的展开状态
+  const existingStatus = {};
+  menus.value.forEach(m => {
+    existingStatus[m.id] = m.showSubMenu;
+  });
+
   menus.value = res.data.map(menu => ({
     ...menu,
-    showSubMenu: false
+    showSubMenu: existingStatus[menu.id] || false
   }));
 }
 
@@ -158,6 +164,7 @@ async function addMenu() {
 async function updateMenu(menu) {
   try {
     await apiUpdateMenu(menu.id, { name: menu.name, order: menu.order });
+    showToast('更新菜单成功', 'success');
     loadMenus();
   } catch (error) {
     showToast('更新菜单失败: ' + getErrorMessage(error), 'error');
@@ -186,6 +193,8 @@ async function addSubMenu(menuId) {
       : 0;
     await apiAddSubMenu(menuId, { name: subMenuName.trim(), order: maxOrder + 1 });
     showToast('添加子菜单成功', 'success');
+    // 自动展开
+    if (menu) menu.showSubMenu = true;
     loadMenus();
   } catch (error) {
     showToast('添加子菜单失败: ' + getErrorMessage(error), 'error');
@@ -195,6 +204,7 @@ async function addSubMenu(menuId) {
 async function updateSubMenu(subMenu) {
   try {
     await apiUpdateSubMenu(subMenu.id, { name: subMenu.name, order: subMenu.order });
+    showToast('更新子菜单成功', 'success');
     loadMenus();
   } catch (error) {
     showToast('更新子菜单失败: ' + getErrorMessage(error), 'error');
@@ -699,4 +709,4 @@ function toggleSubMenu(menuId) {
     padding: 10px 0px 10px 0px;
   }
 }
-</style> 
+</style>

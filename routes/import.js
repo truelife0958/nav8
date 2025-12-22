@@ -4,6 +4,12 @@ const auth = require('./authMiddleware');
 const multer = require('multer');
 const router = express.Router();
 
+function logInfo(...args) {
+  if (process.env.NODE_ENV !== 'test') {
+    console.log(...args);
+  }
+}
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // 解析浏览器书签HTML
@@ -18,13 +24,13 @@ function normalizeUrlForDedupe(rawUrl) {
 
     // 统一去除尾部斜杠（根路径除外）
     if (u.pathname && u.pathname !== '/') {
-      u.pathname = u.pathname.replace(/\/+$/g, '');
+      u.pathname = u.pathname.replace(/\/+$/, '');
       if (!u.pathname) u.pathname = '/';
     }
 
     return u.toString().toLowerCase();
   } catch {
-    return url.replace(/\/+$/g, '').toLowerCase();
+    return url.replace(/\/+$/, '').toLowerCase();
   }
 }
 
@@ -57,7 +63,7 @@ function parseBookmarkHtml(html) {
     });
   }
 
-  console.log(`解析书签HTML: 找到 ${bookmarks.length} 个有效书签`);
+  logInfo(`解析书签HTML: 找到 ${bookmarks.length} 个有效书签`);
   return bookmarks;
 }
 
@@ -112,7 +118,7 @@ function parseBookmarkJson(json) {
 }
 
 // 批量导入书签
-router.post('/', auth, upload.single('file'), (req, res) => {
+router.post('/', auth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: '请上传文件' });
 
   const { menu_id, sub_menu_id } = req.body;
@@ -139,25 +145,14 @@ router.post('/', auth, upload.single('file'), (req, res) => {
   
   if (!bookmarks.length) return res.status(400).json({ error: '未找到有效书签' });
   
-  // 使用 Promise 确保所有插入完成后再返回
   let successCount = 0;
   let skippedCount = 0;
   let errorCount = 0;
-  let completed = 0;
   const total = bookmarks.length;
-  let responseSent = false;
 
   const requestId = req.headers['x-request-id'] || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-  // 设置超时保护
-  const timeout = setTimeout(() => {
-    if (!responseSent) {
-      responseSent = true;
-      res.json({ imported: successCount, skipped: skippedCount, total, timeout: true, requestId });
-    }
-  }, 30000);
-
-  console.log(
+  logInfo(
     `开始导入[${requestId}] ${total} 个书签到菜单 ${menu_id}${sub_menu_id ? ', 子菜单 ' + sub_menu_id : ''}`
   );
   
@@ -165,31 +160,39 @@ router.post('/', auth, upload.single('file'), (req, res) => {
     ? 'INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING'
     : 'INSERT OR IGNORE INTO cards (menu_id, sub_menu_id, title, url, logo_url, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?)';
 
-  bookmarks.forEach((b, i) => {
-    db.run(
-      insertSql,
-      [Number(menu_id), sub_menu_id ? Number(sub_menu_id) : null, b.title, b.url, b.logo_url, b.desc, i],
-      function (err) {
-        if (!err) {
-          if (this?.changes > 0) successCount++;
-          else skippedCount++;
-        } else {
+  try {
+    // 批量导入，控制并发
+    // 由于 Promise.all 并发可能过高，我们将其切分为小批次处理
+    const batchSize = 20;
+    for (let i = 0; i < bookmarks.length; i += batchSize) {
+      const batch = bookmarks.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (b, batchIndex) => {
+        try {
+          const result = await db.run(
+            insertSql,
+            [Number(menu_id), sub_menu_id ? Number(sub_menu_id) : null, b.title, b.url, b.logo_url, b.desc, i + batchIndex]
+          );
+          
+          if (result.changes > 0) {
+            successCount++;
+          } else {
+            skippedCount++;
+          }
+        } catch (err) {
           errorCount++;
           console.error(`导入书签失败 [${b.title}]: ${err.message}`);
         }
+      }));
+    }
 
-        completed++;
-        if (completed === total && !responseSent) {
-          responseSent = true;
-          clearTimeout(timeout);
-          console.log(
-            `导入完成[${requestId}]: 成功 ${successCount}, 跳过 ${skippedCount}, 失败 ${errorCount}, 总计 ${total}`
-          );
-          res.json({ imported: successCount, skipped: skippedCount, total, errors: errorCount, requestId });
-        }
-      }
+    logInfo(
+      `导入完成[${requestId}]: 成功 ${successCount}, 跳过 ${skippedCount}, 失败 ${errorCount}, 总计 ${total}`
     );
-  });
+    res.json({ imported: successCount, skipped: skippedCount, total, errors: errorCount, requestId });
+  } catch (error) {
+    console.error(`导入过程发生严重错误[${requestId}]:`, error);
+    res.status(500).json({ error: '导入过程中断: ' + error.message });
+  }
 });
 
 module.exports = router;

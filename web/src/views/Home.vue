@@ -1,10 +1,11 @@
 <template>
   <div class="home-container">
+    <Toast :message="toast.message" :type="toast.type" v-model:show="toast.show" />
     <Loading :show="loading" text="加载中..." />
     <div class="menu-bar-fixed">
-      <MenuBar 
-        :menus="menus" 
-        :activeId="activeMenu?.id" 
+      <MenuBar
+        :menus="menus"
+        :activeId="activeMenu?.id"
         :activeSubMenuId="activeSubMenu?.id"
         @select="selectMenu"
       />
@@ -20,13 +21,15 @@
             {{ engine.label }}
           </button>
         </div>
-        <div class="search-container">
-          <input 
-            v-model="searchQuery" 
-            type="text" 
-            :placeholder="selectedEngine.placeholder" 
+        <div class="search-container" :class="{ 'history-open': showHistory }">
+          <input
+            v-model="searchQuery"
+            type="text"
+            :placeholder="selectedEngine.placeholder"
             class="search-input"
             @keyup.enter="handleSearch"
+            @focus="showHistory = searchHistory.length > 0"
+            @blur="hideHistoryDelayed"
           />
           <button v-if="searchQuery" class="clear-btn" @click="clearSearch" aria-label="清空" title="clear">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
@@ -36,6 +39,22 @@
               <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
+          <!-- 搜索历史下拉 -->
+          <div v-if="showHistory && searchHistory.length > 0" class="search-history">
+            <div class="history-header">
+              <span>搜索历史</span>
+              <button @click.stop="clearHistory" class="clear-history-btn">清空</button>
+            </div>
+            <div v-for="(item, index) in searchHistory" :key="index"
+                 class="history-item"
+                 @mousedown.prevent="selectHistory(item)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+              </svg>
+              <span>{{ item }}</span>
+              <button @mousedown.prevent.stop="removeHistory(index)" class="remove-history-btn">×</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -54,7 +73,7 @@
     </div>
     
     <!-- 子菜单横向滑动区域 -->
-    <div v-if="currentSubMenus.length > 0" class="sub-menu-section">
+    <div v-if="currentSubMenus.length > 0 && !isSearching" class="sub-menu-section">
       <div class="sub-menu-scroll">
         <button
           v-for="subMenu in currentSubMenus"
@@ -67,24 +86,32 @@
       </div>
       <div class="sub-menu-divider"></div>
     </div>
+
+    <!-- 搜索结果提示 -->
+    <div v-if="isSearching" class="search-result-tip">
+      <p>搜索结果: "{{ searchQuery }}"</p>
+      <button @click="exitSearch" class="exit-search-btn">退出搜索</button>
+    </div>
     
-    <CardGrid :cards="filteredCards"/>
+    <CardGrid :cards="displayCards"/>
     
     <footer class="footer">
       <div class="footer-content">
-        <button @click="showFriendLinks = true" class="friend-link-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-          </svg>
-          友情链接
-        </button>
-        <router-link to="/admin" class="admin-link-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-          </svg>
-          后台管理
-        </router-link>
+        <div class="footer-links">
+          <button @click="showFriendLinks = true" class="friend-link-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            友情链接
+          </button>
+          <router-link to="/admin" class="admin-link-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            后台管理
+          </router-link>
+        </div>
         <p class="copyright">Copyright © 2025 Nav8 | <a href="https://github.com/truelife0958/nav8" target="_blank" class="footer-link">Powered by truelife0958</a></p>
       </div>
     </footer>
@@ -102,19 +129,19 @@
         </div>
         <div class="modal-body">
           <div class="friend-links-grid">
-            <a 
-              v-for="friend in friendLinks" 
-              :key="friend.id" 
-              :href="friend.url" 
-              target="_blank" 
+            <a
+              v-for="friend in friendLinks"
+              :key="friend.id"
+              :href="friend.url"
+              target="_blank"
               class="friend-link-card"
             >
               <div class="friend-link-logo">
-                <img 
-                  v-if="friend.logo" 
-                  :src="friend.logo" 
+                <img
+                  v-if="friend.logo && !brokenFriendLogoIds.has(friend.id)"
+                  :src="friend.logo"
                   :alt="friend.title"
-                  @error="handleLogoError"
+                  @error="() => markFriendLogoBroken(friend.id)"
                 />
                 <div v-else class="friend-link-placeholder">
                   {{ friend.title.charAt(0) }}
@@ -132,22 +159,40 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { getMenus, getCards, getAds, getFriends } from '../api';
+import { ref, onMounted, computed, watch } from 'vue';
+import { getMenus, getCards, getAds, getFriends, searchCards, recordVisit, getErrorMessage } from '../api';
 import MenuBar from '../components/MenuBar.vue';
 import CardGrid from '../components/CardGrid.vue';
 import Loading from '../components/Loading.vue';
+import Toast from '../components/Toast.vue';
 
 const menus = ref([]);
 const activeMenu = ref(null);
 const activeSubMenu = ref(null);
 const cards = ref([]);
+const searchResults = ref([]);
 const searchQuery = ref('');
+const isSearching = ref(false);
+const searchHistory = ref([]);
+const showHistory = ref(false);
 const leftAds = ref([]);
 const rightAds = ref([]);
 const showFriendLinks = ref(false);
 const friendLinks = ref([]);
 const loading = ref(false);
+
+const toast = ref({ show: false, message: '', type: 'info' });
+const brokenFriendLogoIds = ref(new Set());
+
+function showToast(message, type = 'info') {
+  toast.value = { show: true, message, type };
+}
+
+function markFriendLogoBroken(friendId) {
+  const next = new Set(brokenFriendLogoIds.value);
+  next.add(friendId);
+  brokenFriendLogoIds.value = next;
+}
 
 // 聚合搜索配置
 const searchEngines = [
@@ -196,14 +241,67 @@ function selectEngine(engine) {
 
 function clearSearch() {
   searchQuery.value = '';
+  if (isSearching.value) {
+    exitSearch();
+  }
 }
 
-const filteredCards = computed(() => {
-  if (!searchQuery.value) return cards.value;
-  return cards.value.filter(card =>
-    card.title.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-    card.url.toLowerCase().includes(searchQuery.value.toLowerCase())
-  );
+// 搜索历史相关
+function loadSearchHistory() {
+  try {
+    const saved = localStorage.getItem('searchHistory');
+    searchHistory.value = saved ? JSON.parse(saved) : [];
+  } catch { searchHistory.value = []; }
+}
+
+function saveSearchHistory(query) {
+  if (!query.trim()) return;
+  const history = searchHistory.value.filter(h => h !== query);
+  history.unshift(query);
+  searchHistory.value = history.slice(0, 10);
+  localStorage.setItem('searchHistory', JSON.stringify(searchHistory.value));
+}
+
+function selectHistory(item) {
+  searchQuery.value = item;
+  showHistory.value = false;
+  handleSearch();
+}
+
+function removeHistory(index) {
+  searchHistory.value.splice(index, 1);
+  localStorage.setItem('searchHistory', JSON.stringify(searchHistory.value));
+}
+
+function clearHistory() {
+  searchHistory.value = [];
+  localStorage.removeItem('searchHistory');
+  showHistory.value = false;
+}
+
+function hideHistoryDelayed() {
+  setTimeout(() => { showHistory.value = false; }, 200);
+}
+
+function exitSearch() {
+  isSearching.value = false;
+  searchResults.value = [];
+  // 恢复之前的卡片显示
+  if (activeMenu.value) {
+    // 触发重新加载
+    // 这里因为 displayCards 依赖 cards，只要 isSearching 变 false 就会显示 cards
+    // 除非我们想确保 cards 是最新的
+  }
+}
+
+// 显示的卡片：如果是搜索模式显示搜索结果，否则显示当前分类的卡片
+// 前端搜索过滤逻辑：如果没在搜索模式，但输入框有字且是站内搜索，可以保留原有前端过滤作为即时反馈？
+// 这里为了简洁，统一逻辑：搜索模式下显示 searchResults，普通模式下显示 cards (并应用前端过滤? 不，现在用后端搜索)
+const displayCards = computed(() => {
+  if (isSearching.value) return searchResults.value;
+  // 非搜索模式下，如果用户在输入框打字但没按回车（即时过滤）
+  // 为了性能，我们仅在按下回车后触发搜索
+  return cards.value;
 });
 
 // 当前主菜单的子菜单列表
@@ -212,16 +310,22 @@ const currentSubMenus = computed(() => {
 });
 
 onMounted(async () => {
+  loadSearchHistory();
   loading.value = true;
   try {
     const res = await getMenus();
     menus.value = res.data;
     if (menus.value.length) {
       activeMenu.value = menus.value[0];
+      // 如果有子菜单，默认选中第一个子菜单
+      if (activeMenu.value.subMenus && activeMenu.value.subMenus.length > 0) {
+        activeSubMenu.value = activeMenu.value.subMenus[0];
+      }
       await loadCards();
     }
   } catch (error) {
     console.error('加载菜单失败:', error);
+    showToast('加载菜单失败：' + getErrorMessage(error), 'error');
   }
   
   // 加载广告
@@ -231,6 +335,7 @@ onMounted(async () => {
     rightAds.value = adRes.data.filter(ad => ad.position === 'right');
   } catch (error) {
     console.error('加载广告失败:', error);
+    showToast('加载广告失败：' + getErrorMessage(error), 'warning');
   }
   
   try {
@@ -238,23 +343,34 @@ onMounted(async () => {
     friendLinks.value = friendRes.data;
   } catch (error) {
     console.error('加载友链失败:', error);
+    showToast('加载友链失败：' + getErrorMessage(error), 'warning');
   }
   loading.value = false;
+  
+  // 记录访问
+  recordVisit().catch(() => {});
 });
 
 async function selectMenu(menu, parentMenu = null) {
+  exitSearch(); // 切换菜单时退出搜索状态
   if (parentMenu) {
     activeMenu.value = parentMenu;
     activeSubMenu.value = menu;
   } else {
     activeMenu.value = menu;
-    activeSubMenu.value = null;
+    // 如果有子菜单，默认选中第一个子菜单
+    if (menu.subMenus && menu.subMenus.length > 0) {
+      activeSubMenu.value = menu.subMenus[0];
+    } else {
+      activeSubMenu.value = null;
+    }
   }
   await loadCards();
 }
 
 // 选择子菜单
 async function selectSubMenu(subMenu) {
+  exitSearch();
   activeSubMenu.value = subMenu;
   await loadCards();
 }
@@ -273,67 +389,32 @@ async function loadCards() {
 }
 
 async function handleSearch() {
-  if (!searchQuery.value.trim()) return;
+  if (!searchQuery.value.trim()) {
+    showToast('请输入搜索内容', 'warning');
+    return;
+  }
+  
+  saveSearchHistory(searchQuery.value.trim());
+  showHistory.value = false;
+  
   if (selectedEngine.value.name === 'site') {
-    // 站内搜索：遍历所有菜单和子菜单，查找所有卡片
-    let found = false;
-    const query = searchQuery.value.toLowerCase();
-    
-    for (const menu of menus.value) {
-      // 先搜索主菜单的卡片
-      try {
-        const res = await getCards(menu.id);
-        const match = res.data.find(card =>
-          card.title.toLowerCase().includes(query) ||
-          card.url.toLowerCase().includes(query) ||
-          (card.desc && card.desc.toLowerCase().includes(query))
-        );
-        if (match) {
-          activeMenu.value = menu;
-          activeSubMenu.value = null;
-          cards.value = res.data;
-          found = true;
-          break;
-        }
-        
-        // 搜索子菜单的卡片
-        if (menu.subMenus && menu.subMenus.length > 0) {
-          for (const subMenu of menu.subMenus) {
-            const subRes = await getCards(menu.id, subMenu.id);
-            const subMatch = subRes.data.find(card =>
-              card.title.toLowerCase().includes(query) ||
-              card.url.toLowerCase().includes(query) ||
-              (card.desc && card.desc.toLowerCase().includes(query))
-            );
-            if (subMatch) {
-              activeMenu.value = menu;
-              activeSubMenu.value = subMenu;
-              cards.value = subRes.data;
-              found = true;
-              break;
-            }
-          }
-        }
-        if (found) break;
-      } catch (error) {
-        console.error('搜索出错:', error);
+    loading.value = true;
+    try {
+      const res = await searchCards(searchQuery.value);
+      searchResults.value = res.data;
+      isSearching.value = true;
+      if (searchResults.value.length === 0) {
+        showToast('未找到相关内容', 'warning');
       }
-    }
-    
-    if (!found) {
-      alert('未找到相关内容');
+    } catch (error) {
+      console.error('搜索出错:', error);
+      showToast('搜索出错：' + getErrorMessage(error), 'error');
+    } finally {
+      loading.value = false;
     }
   } else {
     const url = selectedEngine.value.url(searchQuery.value);
     window.open(url, '_blank');
-  }
-}
-
-function handleLogoError(event) {
-  event.target.style.display = 'none';
-  const placeholder = event.target.parentElement.querySelector('.friend-link-placeholder');
-  if (placeholder) {
-    placeholder.style.display = 'flex';
   }
 }
 </script>
@@ -383,6 +464,71 @@ function handleLogoError(event) {
   max-width: 480px;
   width: 92%;
   position: relative;
+}
+
+.search-history {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  margin-top: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  z-index: 100;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.clear-history-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #374151;
+  transition: background 0.2s;
+}
+
+.history-item:hover {
+  background: #f3f4f6;
+}
+
+.history-item span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remove-history-btn {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+}
+
+.remove-history-btn:hover {
+  color: #ef4444;
 }
 
 .search-input {
@@ -524,98 +670,75 @@ function handleLogoError(event) {
   margin: 8px 0 16px;
 }
 
-.content-wrapper {
-  display: flex;
-  max-width: 1400px;
-  margin: 0 auto;
-  gap: 2rem;
+.search-result-tip {
+  text-align: center;
+  color: #fff;
+  margin-bottom: 20px;
   position: relative;
   z-index: 2;
-  flex: 1;
-  justify-content: space-between;
-}
-
-.main-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.ad-space {
-  width: 90px;
-  min-width: 60px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
-  padding: 0;
-  background: transparent;
-  margin: 0;
-}
-.ad-space a {
-  width: 100%;
-  display: block;
-}
-.ad-space img {
-  width: 100%;
-  max-width: 90px;
-  max-height: 160px;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
-  background: #fff;
-  object-fit: contain;
-  margin: 0 auto;
+  gap: 10px;
 }
 
-.ad-placeholder {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 2px dashed rgba(255, 255, 255, 0.3);
+.exit-search-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  padding: 4px 12px;
   border-radius: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  padding: 2rem 1rem;
-  text-align: center;
-  font-size: 14px;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.exit-search-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .footer {
   margin-top: auto;
   text-align: center;
-  padding-top: 1rem;
-  padding-bottom: 2rem;
+  padding: 1.5rem 1rem 2rem;
   position: relative;
   z-index: 2;
 }
 
 .footer-content {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.footer-links {
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 50px;
+  gap: 32px;
 }
 
 .friend-link-btn,
 .admin-link-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
   transition: all 0.3s ease;
   font-size: 14px;
-  padding: 0;
+  padding: 6px 12px;
   text-decoration: none;
+  border-radius: 6px;
 }
 
 .friend-link-btn:hover,
 .admin-link-btn:hover {
-  color: #1976d2;
+  color: #60a5fa;
+  background: rgba(255, 255, 255, 0.1);
   transform: translateY(-1px);
 }
 
@@ -820,18 +943,8 @@ function handleLogoError(event) {
 }
 
 @media (max-width: 1200px) {
-  .content-wrapper {
-    flex-direction: column;
-    gap: 1rem;
-  }
-  
-  .ad-space {
-    width: 100%;
-    height: 100px;
-  }
-  
-  .ad-placeholder {
-    height: 80px;
+  .ad-space-fixed {
+     /* display: none; */ /* 1200px以下可能也要考虑隐藏或缩小 */
   }
 }
 
@@ -840,53 +953,45 @@ function handleLogoError(event) {
     padding-top: 80px;
   }
   
-  .content-wrapper {
-    gap: 0.5rem;
-  }
-  
-  .ad-space {
-    height: 60px;
-  }
-  
-  .ad-placeholder {
-    height: 50px;
-    font-size: 12px;
-    padding: 1rem 0.5rem;
-  }
-  
   /* 移动端隐藏侧边广告，避免遮挡内容 */
   .ad-space-fixed {
     display: none;
   }
   
   .footer {
-    padding-top: 2rem;
+    padding: 1rem 0.5rem 1.5rem;
   }
-  .friend-link-btn,
-  .admin-link-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.8);
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 0.7rem;
-    padding: 0;
-    text-decoration: none;
-  }
-  .copyright {
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 0.7rem;
-    margin: 0;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  }
+  
   .footer-content {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .footer-links {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 20px;
+    gap: 16px;
+  }
+  
+  .friend-link-btn,
+  .admin-link-btn {
+    font-size: 12px;
+    padding: 4px 8px;
+    gap: 4px;
+  }
+  
+  .friend-link-btn svg,
+  .admin-link-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .copyright {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 11px;
+    margin: 0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 }
-</style> 
+</style>

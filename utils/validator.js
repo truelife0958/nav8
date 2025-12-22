@@ -2,8 +2,8 @@
  * 通用验证和安全工具
  */
 
-// URL验证正则
-const URL_REGEX = /^https?:\/\/[^\s<>'"]+$/i;
+// URL验证 - 使用更宽松的正则，支持国际化域名和特殊字符
+const URL_REGEX = /^https?:\/\/[^\s<>"]+$/i;
 
 // XSS防护 - 转义HTML特殊字符
 function escapeHtml(str) {

@@ -5,46 +5,38 @@ const { validateFriend, isPositiveInteger } = require('../utils/validator');
 const router = express.Router();
 
 // 获取友链
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { page, pageSize } = req.query;
   
-  if (!page && !pageSize) {
-    db.all('SELECT * FROM friends', [], (err, rows) => {
-      if (err) {
-        console.error('获取友链失败:', err);
-        return res.status(500).json({ error: '获取友链失败' });
-      }
+  try {
+    if (!page && !pageSize) {
+      const rows = await db.all('SELECT * FROM friends');
       res.json(rows || []);
-    });
-  } else {
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const size = Math.min(100, Math.max(1, parseInt(pageSize) || 10));
-    const offset = (pageNum - 1) * size;
-    
-    db.get('SELECT COUNT(*) as total FROM friends', [], (err, countRow) => {
-      if (err) {
-        console.error('获取友链数量失败:', err);
-        return res.status(500).json({ error: '获取友链失败' });
-      }
+    } else {
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const size = Math.min(100, Math.max(1, parseInt(pageSize) || 10));
+      const offset = (pageNum - 1) * size;
       
-      db.all('SELECT * FROM friends LIMIT ? OFFSET ?', [size, offset], (err, rows) => {
-        if (err) {
-          console.error('获取友链列表失败:', err);
-          return res.status(500).json({ error: '获取友链失败' });
-        }
-        res.json({
-          total: countRow?.total || 0,
-          page: pageNum,
-          pageSize: size,
-          data: rows || []
-        });
+      const countRow = await db.get('SELECT COUNT(*) as total FROM friends');
+      const total = countRow?.total || 0;
+      
+      const rows = await db.all('SELECT * FROM friends LIMIT ? OFFSET ?', [size, offset]);
+      
+      res.json({
+        total: total,
+        page: pageNum,
+        pageSize: size,
+        data: rows || []
       });
-    });
+    }
+  } catch (err) {
+    console.error('获取友链失败:', err);
+    res.status(500).json({ error: '获取友链失败' });
   }
 });
 
 // 新增友链
-router.post('/', auth, (req, res) => {
+router.post('/', auth, async (req, res) => {
   const validation = validateFriend(req.body);
   if (!validation.valid) {
     return res.status(400).json({ error: validation.error });
@@ -52,17 +44,17 @@ router.post('/', auth, (req, res) => {
   
   const { title, url, logo } = validation.data;
   
-  db.run('INSERT INTO friends (title, url, logo) VALUES (?, ?, ?)', [title, url, logo], function(err) {
-    if (err) {
-      console.error('添加友链失败:', err);
-      return res.status(500).json({ error: '添加失败' });
-    }
-    res.json({ id: this.lastID });
-  });
+  try {
+    const result = await db.run('INSERT INTO friends (title, url, logo) VALUES (?, ?, ?)', [title, url, logo]);
+    res.json({ id: result.lastID });
+  } catch (err) {
+    console.error('添加友链失败:', err);
+    res.status(500).json({ error: '添加失败' });
+  }
 });
 
 // 修改友链
-router.put('/:id', auth, (req, res) => {
+router.put('/:id', auth, async (req, res) => {
   const friendId = req.params.id;
   if (!isPositiveInteger(friendId)) {
     return res.status(400).json({ error: '无效的友链ID' });
@@ -75,32 +67,32 @@ router.put('/:id', auth, (req, res) => {
   
   const { title, url, logo } = validation.data;
   
-  db.run('UPDATE friends SET title=?, url=?, logo=? WHERE id=?', [title, url, logo, Number(friendId)], function(err) {
-    if (err) {
-      console.error('更新友链失败:', err);
-      return res.status(500).json({ error: '更新失败' });
-    }
-    if (this.changes === 0) {
+  try {
+    const result = await db.run('UPDATE friends SET title=?, url=?, logo=? WHERE id=?', [title, url, logo, Number(friendId)]);
+    if (result.changes === 0) {
       return res.status(404).json({ error: '友链不存在' });
     }
-    res.json({ changed: this.changes });
-  });
+    res.json({ changed: result.changes });
+  } catch (err) {
+    console.error('更新友链失败:', err);
+    res.status(500).json({ error: '更新失败' });
+  }
 });
 
 // 删除友链
-router.delete('/:id', auth, (req, res) => {
+router.delete('/:id', auth, async (req, res) => {
   const friendId = req.params.id;
   if (!isPositiveInteger(friendId)) {
     return res.status(400).json({ error: '无效的友链ID' });
   }
   
-  db.run('DELETE FROM friends WHERE id=?', [Number(friendId)], function(err) {
-    if (err) {
-      console.error('删除友链失败:', err);
-      return res.status(500).json({ error: '删除失败' });
-    }
-    res.json({ deleted: this.changes });
-  });
+  try {
+    const result = await db.run('DELETE FROM friends WHERE id=?', [Number(friendId)]);
+    res.json({ deleted: result.changes });
+  } catch (err) {
+    console.error('删除友链失败:', err);
+    res.status(500).json({ error: '删除失败' });
+  }
 });
 
 module.exports = router;

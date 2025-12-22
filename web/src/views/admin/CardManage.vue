@@ -34,12 +34,28 @@
           </svg>
           检测重复
         </button>
+        <button class="btn btn-dead-link" @click="checkDeadLinksHandler" :disabled="checkingLinks">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            <line x1="4" y1="4" x2="20" y2="20" stroke-width="2"/>
+          </svg>
+          {{ checkingLinks ? '检测中...' : '检测死链' }}
+        </button>
         <button v-if="duplicateIds.size > 0" class="btn btn-select-dup" @click="selectDuplicates">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
             <path d="M9 9h6v6H9z"/>
           </svg>
           选中重复({{ duplicateIds.size }})
+        </button>
+        <button v-if="deadLinkIds.size > 0" class="btn btn-select-dead" @click="selectDeadLinks">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+          选中死链({{ deadLinkIds.size }})
         </button>
       </div>
     </div>
@@ -66,6 +82,7 @@
       <table class="card-table">
         <thead>
           <tr>
+            <th class="drag-col"></th>
             <th class="checkbox-col"><input type="checkbox" @change="toggleSelectAll" :checked="isAllSelected" /></th>
             <th>标题</th>
             <th>网址</th>
@@ -76,7 +93,14 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="card in cards" :key="card.id" :class="{ selected: selectedCards.includes(card.id), duplicate: duplicateIds.has(card.id) }">
+          <tr v-for="(card, index) in cards" :key="card.id"
+              :class="{ selected: selectedCards.includes(card.id), duplicate: duplicateIds.has(card.id), 'dead-link': deadLinkIds.has(card.id), dragging: dragIndex === index }"
+              draggable="true"
+              @dragstart="onDragStart($event, index)"
+              @dragover.prevent="onDragOver($event, index)"
+              @drop="onDrop($event, index)"
+              @dragend="onDragEnd">
+            <td class="drag-col"><span class="drag-handle">⋮⋮</span></td>
             <td class="checkbox-col"><input type="checkbox" :checked="selectedCards.includes(card.id)" @change="toggleSelect(card.id)" /></td>
             <td><input v-model="card.title" @blur="updateCard(card)" class="table-input" /></td>
             <td><input v-model="card.url" @blur="updateCard(card)" class="table-input" /></td>
@@ -154,6 +178,8 @@ import {
   batchDeleteCards,
   batchMoveCards,
   importBookmarks,
+  checkDeadLinks,
+  batchReorderCards,
   getErrorMessage
 } from '../../api';
 import Toast from '../../components/Toast.vue';
@@ -174,6 +200,17 @@ const batchTargetSubMenuId = ref('');
 // 重复检测
 const duplicateIds = ref(new Set());
 
+// 死链检测
+const deadLinkIds = ref(new Set());
+const checkingLinks = ref(false);
+
+function addToIdSet(setRef, ids) {
+  if (!ids || ids.length === 0) return;
+  const next = new Set(setRef.value);
+  for (const id of ids) next.add(id);
+  setRef.value = next;
+}
+
 // Toast提示
 const toast = ref({ show: false, message: '', type: 'info' });
 
@@ -185,6 +222,10 @@ const importFile = ref(null);
 const importFileName = ref('');
 const importing = ref(false);
 const importFileInput = ref(null);
+
+// 拖拽排序相关
+const dragIndex = ref(null);
+const dropIndex = ref(null);
 
 const importSubMenus = computed(() => {
   if (!importMenuId.value) return [];
@@ -246,6 +287,7 @@ async function loadCards() {
   const res = await getCards(selectedMenuId.value, selectedSubMenuId.value || null);
   cards.value = res.data;
   duplicateIds.value = new Set(); // 清除重复标记
+  deadLinkIds.value = new Set(); // 清除死链标记
 }
 
 // 检测重复卡片（按URL）
@@ -280,6 +322,56 @@ function selectDuplicates() {
   }
   selectedCards.value = [...duplicateIds.value];
   showToast(`已选中 ${selectedCards.value.length} 个重复卡片，可批量删除`, 'info');
+}
+
+// 检测死链
+async function checkDeadLinksHandler() {
+  if (cards.value.length === 0) {
+    showToast('当前没有卡片可检测', 'warning');
+    return;
+  }
+  
+  checkingLinks.value = true;
+  deadLinkIds.value = new Set();
+  
+  try {
+    const allIds = cards.value.map(c => c.id);
+    const batchSize = 10;
+    
+    showToast(`开始检测，共 ${allIds.length} 个卡片...`, 'info');
+    
+    for (let i = 0; i < allIds.length; i += batchSize) {
+      const batchIds = allIds.slice(i, i + batchSize);
+      try {
+        const res = await checkDeadLinks(batchIds);
+        if (res.data && res.data.deadLinks && res.data.deadLinks.length > 0) {
+          addToIdSet(deadLinkIds, res.data.deadLinks);
+        }
+      } catch (err) {
+        console.error('批次检测失败:', err);
+      }
+    }
+    
+    if (deadLinkIds.value.size > 0) {
+      showToast(`检测完成，发现 ${deadLinkIds.value.size} 个死链（已高亮显示），可点击"选中死链"批量删除`, 'warning');
+    } else {
+      showToast('检测完成，所有链接均有效', 'success');
+    }
+  } catch (error) {
+    showToast('检测过程发生错误: ' + getErrorMessage(error), 'error');
+  } finally {
+    checkingLinks.value = false;
+  }
+}
+
+// 选中所有死链卡片
+function selectDeadLinks() {
+  if (deadLinkIds.value.size === 0) {
+    showToast('请先检测死链', 'warning');
+    return;
+  }
+  selectedCards.value = [...deadLinkIds.value];
+  showToast(`已选中 ${selectedCards.value.length} 个死链卡片，可批量删除`, 'info');
 }
 
 function normalizeUrl(url) {
@@ -399,6 +491,40 @@ async function deleteCard(id) {
   } catch (error) {
     showToast('删除卡片失败: ' + getErrorMessage(error), 'error');
   }
+}
+
+// 拖拽排序
+function onDragStart(e, index) {
+  dragIndex.value = index;
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDragOver(e, index) {
+  dropIndex.value = index;
+}
+
+async function onDrop(e, index) {
+  if (dragIndex.value === null || dragIndex.value === index) return;
+  
+  const draggedCard = cards.value[dragIndex.value];
+  cards.value.splice(dragIndex.value, 1);
+  cards.value.splice(index, 0, draggedCard);
+  
+  // 更新排序值
+  const orders = cards.value.map((card, i) => ({ id: card.id, order: i }));
+  try {
+    await batchReorderCards(orders);
+    cards.value.forEach((card, i) => card.order = i);
+    showToast('排序已更新', 'success');
+  } catch (error) {
+    showToast('排序更新失败: ' + getErrorMessage(error), 'error');
+    loadCards();
+  }
+}
+
+function onDragEnd() {
+  dragIndex.value = null;
+  dropIndex.value = null;
 }
 
 // 导入书签相关
@@ -521,34 +647,65 @@ async function handleImport() {
 }
 
 /* 表格列宽度设置 */
-.card-table th:nth-child(1), /* 标题列 */
+.drag-col {
+  width: 30px !important;
+  text-align: center !important;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #9ca3af;
+  font-size: 14px;
+  user-select: none;
+}
+
+.drag-handle:hover {
+  color: #6b7280;
+}
+
+tr.dragging {
+  opacity: 0.5;
+  background: #e0f2fe !important;
+}
+
+.card-table th:nth-child(1), /* 拖拽列 */
 .card-table td:nth-child(1) {
+  width: 30px;
+}
+
+.card-table th:nth-child(2), /* 勾选列 */
+.card-table td:nth-child(2) {
+  width: 40px;
+}
+
+.card-table th:nth-child(3), /* 标题列 */
+.card-table td:nth-child(3) {
   width: 12%;
 }
 
-.card-table th:nth-child(2), /* 网址列 */
-.card-table td:nth-child(2) {
-  width: 25%;
-}
-
-.card-table th:nth-child(3), /* Logo链接列 */
-.card-table td:nth-child(3) {
-  width: 25%;
-}
-
-.card-table th:nth-child(4), /* 描述列 */
+.card-table th:nth-child(4), /* 网址列 */
 .card-table td:nth-child(4) {
-  width: 15%;
+  width: 23%;
 }
 
-.card-table th:nth-child(5), /* 排序列 */
+.card-table th:nth-child(5), /* Logo链接列 */
 .card-table td:nth-child(5) {
+  width: 23%;
+}
+
+.card-table th:nth-child(6), /* 描述列 */
+.card-table td:nth-child(6) {
+  width: 13%;
+}
+
+.card-table th:nth-child(7), /* 排序列 */
+.card-table td:nth-child(7) {
   width: 8%;
 }
 
-.card-table th:nth-child(6), /* 操作列 */
-.card-table td:nth-child(6) {
-  width: 15%;
+.card-table th:nth-child(8), /* 操作列 */
+.card-table td:nth-child(8) {
+  width: 10%;
   text-align: center;
 }
 
@@ -662,7 +819,7 @@ async function handleImport() {
   background: #4b5563;
 }
 
-/* 批量操作栏 */
+/* 批量操作栏 - sticky 跟随滚动 */
 .batch-actions {
   display: flex;
   align-items: center;
@@ -674,6 +831,9 @@ async function handleImport() {
   margin-bottom: 16px;
   width: 95%;
   flex-wrap: wrap;
+  position: sticky;
+  top: 64px;
+  z-index: 50;
 }
 
 .selected-count {
@@ -735,6 +895,36 @@ tr.duplicate td {
 }
 .btn-select-dup:hover {
   background: #dc2626;
+}
+
+/* 死链检测按钮 */
+.btn-dead-link {
+  background: #dc2626;
+}
+.btn-dead-link:hover {
+  background: #b91c1c;
+}
+.btn-dead-link:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 选中死链按钮 */
+.btn-select-dead {
+  background: #991b1b;
+}
+.btn-select-dead:hover {
+  background: #7f1d1d;
+}
+
+/* 死链卡片高亮 */
+tr.dead-link {
+  background: #fef2f2;
+  border-left: 3px solid #dc2626;
+}
+tr.dead-link td {
+  color: #991b1b;
 }
 
 /* 导入弹窗样式 */
@@ -865,4 +1055,4 @@ tr.duplicate td {
     width: auto;
   }
 }
-</style> 
+</style>

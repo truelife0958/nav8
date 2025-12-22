@@ -30,48 +30,44 @@ function getShanghaiTime() {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  
+
   // 输入验证
   if (!username || !password) {
     return res.status(400).json({ error: '请输入用户名和密码', message: '请输入用户名和密码' });
   }
-  
+
   if (typeof username !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ error: '参数格式错误', message: '参数格式错误' });
   }
-  
-  db.get('SELECT * FROM users WHERE username=?', [username.trim()], (err, user) => {
-    if (err) {
-      console.error('数据库查询错误:', err);
-      return res.status(500).json({ error: '服务器错误', message: '服务器错误' });
-    }
+
+  try {
+    const user = await db.get('SELECT * FROM users WHERE username=?', [username.trim()]);
     if (!user) {
       return res.status(401).json({ error: '用户名或密码错误', message: '用户名或密码错误' });
     }
-    
-    bcrypt.compare(password, user.password, (err, result) => {
-      if (err) {
-        console.error('密码验证错误:', err);
-        return res.status(500).json({ error: '服务器错误', message: '服务器错误' });
-      }
-      
-      if (result) {
-        // 记录上次登录时间和IP
-        const lastLoginTime = user.last_login_time;
-        const lastLoginIp = user.last_login_ip;
-        // 更新为本次登录（上海时间）
-        const now = getShanghaiTime();
-        const ip = getClientIp(req);
-        db.run('UPDATE users SET last_login_time=?, last_login_ip=? WHERE id=?', [now, ip, user.id]);
-        const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '2h' });
-        res.json({ token, lastLoginTime, lastLoginIp });
-      } else {
-        res.status(401).json({ error: '用户名或密码错误', message: '用户名或密码错误' });
-      }
-    });
-  });
+
+    const ok = bcrypt.compareSync(password, user.password);
+    if (!ok) {
+      return res.status(401).json({ error: '用户名或密码错误', message: '用户名或密码错误' });
+    }
+
+    // 记录上次登录时间和IP
+    const lastLoginTime = user.last_login_time;
+    const lastLoginIp = user.last_login_ip;
+
+    // 更新为本次登录（上海时间）
+    const now = getShanghaiTime();
+    const ip = getClientIp(req);
+    await db.run('UPDATE users SET last_login_time=?, last_login_ip=? WHERE id=?', [now, ip, user.id]);
+
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '2h' });
+    res.json({ token, lastLoginTime, lastLoginIp });
+  } catch (err) {
+    console.error('登录失败:', err);
+    return res.status(500).json({ error: '服务器错误', message: '服务器错误' });
+  }
 });
 
 module.exports = router;
