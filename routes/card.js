@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const auth = require('./authMiddleware');
-const { validateCard, validateIdArray, isPositiveInteger } = require('../utils/validator');
+const { validateCard, validateIdArray, isPositiveInteger, processCardsWithDisplayLogo } = require('../utils/validator');
 const router = express.Router();
 
 // 检测链接是否有效
@@ -71,24 +71,8 @@ router.get('/search/query', async (req, res) => {
       `SELECT * FROM cards WHERE title LIKE ? OR url LIKE ? OR "desc" LIKE ? ORDER BY "order" LIMIT 100`,
       [keyword, keyword, keyword]
     );
-    
-    const processedCards = (cards || []).map(card => {
-      let display_logo = '/default-favicon.png';
-      try {
-        if (card.custom_logo_path) {
-          display_logo = '/uploads/' + card.custom_logo_path;
-        } else if (card.logo_url) {
-          display_logo = card.logo_url;
-        } else if (card.url) {
-          display_logo = card.url.replace(/\/+$/, '') + '/favicon.ico';
-        }
-      } catch (e) {
-        // 保持默认图标
-      }
-      return { ...card, display_logo };
-    });
-    
-    res.json(processedCards);
+
+    res.json(processCardsWithDisplayLogo(cards));
   } catch (err) {
     console.error('搜索失败:', err);
     res.status(500).json({ error: '搜索失败' });
@@ -120,24 +104,7 @@ router.get('/:menuId', async (req, res) => {
   
   try {
     const rows = await db.all(query, params);
-    
-    const cards = (rows || []).map(card => {
-      let display_logo = '/default-favicon.png';
-      try {
-        if (card.custom_logo_path) {
-          display_logo = '/uploads/' + card.custom_logo_path;
-        } else if (card.logo_url) {
-          display_logo = card.logo_url;
-        } else if (card.url) {
-          display_logo = card.url.replace(/\/+$/, '') + '/favicon.ico';
-        }
-      } catch (e) {
-        // 保持默认图标
-      }
-      return { ...card, display_logo };
-    });
-    
-    res.json(cards);
+    res.json(processCardsWithDisplayLogo(rows));
   } catch (err) {
     console.error('获取卡片失败:', err);
     return res.status(500).json({ error: '获取卡片失败' });

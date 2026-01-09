@@ -4,29 +4,34 @@ const auth = require('./authMiddleware');
 const { validateMenuName, isPositiveInteger, isNonNegativeInteger } = require('../utils/validator');
 const router = express.Router();
 
-// 获取所有菜单（包含子菜单）
+// Get all menus (with submenus)
 router.get('/', async (req, res) => {
   const { page, pageSize } = req.query;
 
   try {
     if (!page && !pageSize) {
-      const menus = await db.all('SELECT * FROM menus ORDER BY "order"');
+      // Optimized: Batch query instead of N+1 queries
+      const [menus, allSubMenus] = await Promise.all([
+        db.all('SELECT * FROM menus ORDER BY "order"'),
+        db.all('SELECT * FROM sub_menus ORDER BY "order"')
+      ]);
+
       if (!menus || menus.length === 0) return res.json([]);
 
-      const menusWithSubMenus = await Promise.all(
-        menus.map(async (menu) => {
-          try {
-            const subMenus = await db.all(
-              'SELECT * FROM sub_menus WHERE parent_id = ? ORDER BY "order"',
-              [menu.id]
-            );
-            return { ...menu, subMenus: subMenus || [] };
-          } catch (err) {
-            console.error('获取子菜单失败:', err);
-            return { ...menu, subMenus: [] };
-          }
-        })
-      );
+      // Group submenus by parent_id in memory (O(n) instead of N queries)
+      const subMenusByParent = new Map();
+      for (const sub of (allSubMenus || [])) {
+        if (!subMenusByParent.has(sub.parent_id)) {
+          subMenusByParent.set(sub.parent_id, []);
+        }
+        subMenusByParent.get(sub.parent_id).push(sub);
+      }
+
+      // Assemble menus with their submenus
+      const menusWithSubMenus = menus.map(menu => ({
+        ...menu,
+        subMenus: subMenusByParent.get(menu.id) || []
+      }));
 
       return res.json(menusWithSubMenus);
     }

@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
+const cookieParser = require('cookie-parser');
 
 const db = require('./db');
 
@@ -65,12 +66,25 @@ const writeLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// 安全配置
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+// CORS configuration - more restrictive by default
+const corsOrigin = process.env.CORS_ORIGIN;
+const corsOptions = {
+  origin: corsOrigin ? corsOrigin.split(',').map(s => s.trim()) : true, // true = same-origin only when no env set
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true // Allow cookies to be sent
+};
+
+// In development, allow all origins for convenience
+if (process.env.NODE_ENV !== 'production' && !corsOrigin) {
+  corsOptions.origin = '*';
+  console.log('⚠️  CORS: Development mode - allowing all origins');
+} else if (!corsOrigin) {
+  console.log('ℹ️  CORS: No CORS_ORIGIN set - using same-origin policy');
+}
+
+app.use(cors(corsOptions));
+app.use(cookieParser()); // Parse cookies for UV tracking
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(compression());

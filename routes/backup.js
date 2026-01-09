@@ -30,68 +30,73 @@ router.get('/export', auth, async (req, res) => {
   }
 });
 
-// 导入数据
+// Import data with transaction support for data consistency
 router.post('/import', auth, express.json({ limit: '50mb' }), async (req, res) => {
   const { data, overwrite } = req.body;
   if (!data) return res.status(400).json({ error: '无效的备份数据' });
 
   try {
-    if (overwrite) {
-      await db.run('DELETE FROM cards');
-      await db.run('DELETE FROM sub_menus');
-      await db.run('DELETE FROM menus');
-      await db.run('DELETE FROM ads');
-      await db.run('DELETE FROM friends');
-    }
+    const imported = await db.transaction(async (txDb) => {
+      let counts = { menus: 0, sub_menus: 0, cards: 0, ads: 0, friends: 0 };
 
-    let imported = { menus: 0, sub_menus: 0, cards: 0, ads: 0, friends: 0 };
-    
-    // 建立旧ID到新ID的映射（用于关联关系）
-    const menuIdMap = new Map();
-    const subMenuIdMap = new Map();
+      if (overwrite) {
+        // Clear existing data within transaction - safe rollback if import fails
+        await txDb.run('DELETE FROM cards');
+        await txDb.run('DELETE FROM sub_menus');
+        await txDb.run('DELETE FROM menus');
+        await txDb.run('DELETE FROM ads');
+        await txDb.run('DELETE FROM friends');
+      }
 
-    for (const menu of (data.menus || [])) {
-      const result = await db.run('INSERT INTO menus (name, "order") VALUES (?, ?)', [menu.name, menu.order || 0]);
-      menuIdMap.set(menu.id, result.lastID);
-      imported.menus++;
-    }
+      // Build ID mappings for relationships
+      const menuIdMap = new Map();
+      const subMenuIdMap = new Map();
 
-    for (const sub of (data.sub_menus || [])) {
-      const newParentId = menuIdMap.get(sub.parent_id) || sub.parent_id;
-      const result = await db.run('INSERT INTO sub_menus (parent_id, name, "order") VALUES (?, ?, ?)',
-        [newParentId, sub.name, sub.order || 0]);
-      subMenuIdMap.set(sub.id, result.lastID);
-      imported.sub_menus++;
-    }
+      for (const menu of (data.menus || [])) {
+        const result = await txDb.run('INSERT INTO menus (name, "order") VALUES (?, ?)', [menu.name, menu.order || 0]);
+        menuIdMap.set(menu.id, result.lastID);
+        counts.menus++;
+      }
 
-    for (const card of (data.cards || [])) {
-      const newMenuId = menuIdMap.get(card.menu_id) || card.menu_id;
-      const newSubMenuId = card.sub_menu_id ? (subMenuIdMap.get(card.sub_menu_id) || card.sub_menu_id) : null;
+      for (const sub of (data.sub_menus || [])) {
+        const newParentId = menuIdMap.get(sub.parent_id) || sub.parent_id;
+        const result = await txDb.run('INSERT INTO sub_menus (parent_id, name, "order") VALUES (?, ?, ?)',
+          [newParentId, sub.name, sub.order || 0]);
+        subMenuIdMap.set(sub.id, result.lastID);
+        counts.sub_menus++;
+      }
 
-      const insertCardSql = db.isPostgres
-        ? 'INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING'
-        : 'INSERT OR IGNORE INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+      for (const card of (data.cards || [])) {
+        const newMenuId = menuIdMap.get(card.menu_id) || card.menu_id;
+        const newSubMenuId = card.sub_menu_id ? (subMenuIdMap.get(card.sub_menu_id) || card.sub_menu_id) : null;
 
-      await db.run(
-        insertCardSql,
-        [newMenuId, newSubMenuId, card.title, card.url, card.logo_url || '', card.custom_logo_path || '', card.desc || '', card.order || 0]
-      );
-      imported.cards++;
-    }
+        const insertCardSql = db.isPostgres
+          ? 'INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING'
+          : 'INSERT OR IGNORE INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
 
-    for (const ad of (data.ads || [])) {
-      await db.run('INSERT INTO ads (position, img, url) VALUES (?, ?, ?)', [ad.position, ad.img, ad.url]);
-      imported.ads++;
-    }
+        await txDb.run(
+          insertCardSql,
+          [newMenuId, newSubMenuId, card.title, card.url, card.logo_url || '', card.custom_logo_path || '', card.desc || '', card.order || 0]
+        );
+        counts.cards++;
+      }
 
-    for (const friend of (data.friends || [])) {
-      await db.run('INSERT INTO friends (title, url, logo) VALUES (?, ?, ?)', [friend.title, friend.url, friend.logo || '']);
-      imported.friends++;
-    }
+      for (const ad of (data.ads || [])) {
+        await txDb.run('INSERT INTO ads (position, img, url) VALUES (?, ?, ?)', [ad.position, ad.img, ad.url]);
+        counts.ads++;
+      }
+
+      for (const friend of (data.friends || [])) {
+        await txDb.run('INSERT INTO friends (title, url, logo) VALUES (?, ?, ?)', [friend.title, friend.url, friend.logo || '']);
+        counts.friends++;
+      }
+
+      return counts;
+    });
 
     res.json({ success: true, imported });
   } catch (err) {
-    console.error('导入失败:', err);
+    console.error('导入失败 (已回滚):', err);
     res.status(500).json({ error: '导入失败: ' + err.message });
   }
 });

@@ -2,6 +2,7 @@
 
 ## 目录
 
+- [安全配置说明](#安全配置说明)
 - [Koyeb 部署（免费 Docker，推荐）](#koyeb-部署免费-docker推荐)
 - [Fly.io 部署（免费额度 Docker，可选）](#flyio-部署免费额度-docker可选)
 - [Docker 部署](#docker-部署)
@@ -11,61 +12,80 @@
 - [数据备份与恢复](#数据备份与恢复)
 - [功能说明](#功能说明)
 - [常见问题](#常见问题)
-- [Zeabur（已弃用）](#zeabur已弃用)
+
+---
+
+## 安全配置说明
+
+### 🔐 重要：密码和密钥配置
+
+从最新版本开始，Nav8 采用更安全的默认配置：
+
+| 变量 | 未设置时的行为 | 建议 |
+|------|---------------|------|
+| `ADMIN_PASSWORD` | 随机生成16位密码，启动时打印到控制台 | **生产环境必须设置** |
+| `JWT_SECRET` | 随机生成64位密钥，重启后token失效 | **生产环境必须设置** |
+
+### 首次启动
+
+如果不设置 `ADMIN_PASSWORD`，启动日志会显示：
+
+```
+🔐 Default admin password generated: a1b2c3d4e5f6g7h8
+   Please change it after first login or set ADMIN_PASSWORD env variable.
+```
+
+### 生产环境配置示例
+
+```bash
+# 必须设置的环境变量
+ADMIN_PASSWORD=your_strong_password_here
+JWT_SECRET=your_random_64_char_secret_key_here
+NODE_ENV=production
+
+# 可选配置
+CORS_ORIGIN=https://your-domain.com
+```
 
 ---
 
 ## Koyeb 部署（免费 Docker，推荐）
 
-Koyeb 支持直接从镜像仓库拉取 Docker 镜像部署，适合替代 Zeabur 这类 PaaS。
+Koyeb 支持直接从镜像仓库拉取 Docker 镜像部署。
 
 ### 0. 重要说明（数据库与持久化）
 
-- 大多数免费 PaaS 的容器文件系统是 **临时的**，重启/迁移可能丢失 `SQLite` 数据文件。
-- 生产/长期使用建议：使用 **托管 PostgreSQL（Neon / Supabase / Render Postgres 等）**，并设置 `DATABASE_URL`。
+- 大多数免费 PaaS 的容器文件系统是 **临时的**，重启/迁移可能丢失 SQLite 数据。
+- **生产/长期使用建议**：使用托管 PostgreSQL（Neon / Supabase / Render Postgres 等）
 
-### 1. 准备镜像
-
-使用已发布的镜像：
-
-- `ghcr.io/truelife0958/nav8:latest`
-
-### 2. 创建 Service
+### 1. 创建 Service
 
 1. 登录 Koyeb
 2. Create App → **Docker**
-3. Image：填写 `ghcr.io/truelife0958/nav8:latest`
+3. Image：`ghcr.io/truelife0958/nav8:latest`
 4. Exposed port：`3000`
 
-### 3. 配置环境变量
+### 2. 配置环境变量
 
 | 变量名 | 值 | 说明 |
 |--------|-----|------|
-| `PORT` | `3000` | 端口（与 Koyeb 暴露端口一致） |
+| `PORT` | `3000` | 端口 |
 | `ADMIN_USERNAME` | `admin` | 管理员用户名 |
-| `ADMIN_PASSWORD` | `your_password` | 管理员密码 |
-| `DATABASE_URL` | `postgres://...` | **推荐**：使用外部 PostgreSQL |
-| `POSTGRES_SSL` | `true` 或 `false` | 需要 SSL 时设为 `true` |
-
-### 4. 绑定域名
-
-在 Koyeb 的 Domains 中绑定域名，或使用其提供的默认域名。
+| `ADMIN_PASSWORD` | `your_password` | **必须设置** |
+| `JWT_SECRET` | `random_secret` | **必须设置** |
+| `DATABASE_URL` | `postgres://...` | 推荐使用外部 PostgreSQL |
+| `POSTGRES_SSL` | `true` | 需要 SSL 时设置 |
+| `NODE_ENV` | `production` | 生产环境 |
 
 ---
 
 ## Fly.io 部署（免费额度 Docker，可选）
 
-Fly.io 支持 Dockerfile/镜像部署，有一定免费额度（可能需要绑定支付方式，视其政策而定）。
+### 关键配置要点
 
-### 1. 创建应用
-
-- 按 Fly.io 官方流程安装 `flyctl` 并登录
-- 选择从镜像或 Dockerfile 部署
-
-### 2. 关键配置要点
-
-- 应用监听端口需与平台分配一致：建议保持应用内部 `PORT=3000`
-- 强烈建议使用外部 PostgreSQL（原因同上）
+- 应用监听端口：`PORT=3000`
+- **强烈建议**使用外部 PostgreSQL
+- 必须设置 `ADMIN_PASSWORD` 和 `JWT_SECRET`
 
 ---
 
@@ -81,6 +101,8 @@ docker run -d \
   -v $(pwd)/uploads:/app/uploads \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD=your_secure_password \
+  -e JWT_SECRET=your_random_secret_key \
+  -e NODE_ENV=production \
   ghcr.io/truelife0958/nav8:latest
 ```
 
@@ -90,8 +112,11 @@ docker run -d \
 |--------|------|--------|
 | `PORT` | 服务端口 | `3000` |
 | `ADMIN_USERNAME` | 管理员用户名 | `admin` |
-| `ADMIN_PASSWORD` | 管理员密码 | `123456` |
-| `DATABASE_URL` | PostgreSQL 连接字符串（可选，默认使用 SQLite） | - |
+| `ADMIN_PASSWORD` | 管理员密码 | 随机生成 |
+| `JWT_SECRET` | JWT签名密钥 | 随机生成 |
+| `DATABASE_URL` | PostgreSQL 连接串 | 空（使用SQLite） |
+| `CORS_ORIGIN` | 允许跨域来源 | 生产模式同源 |
+| `NODE_ENV` | 运行环境 | `development` |
 
 ### 数据持久化
 
@@ -102,7 +127,7 @@ docker run -d \
 
 ## Docker Compose 部署
 
-### 1. 创建 docker-compose.yml
+### SQLite 模式
 
 ```yaml
 version: '3'
@@ -116,29 +141,66 @@ services:
     environment:
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD=your_secure_password
+      - JWT_SECRET=your_random_secret_key
+      - NODE_ENV=production
     volumes:
       - ./database:/app/database
       - ./uploads:/app/uploads
     restart: unless-stopped
 ```
 
-### 2. 启动服务
+### PostgreSQL 模式
 
-```bash
-docker-compose up -d
+```yaml
+version: '3'
+
+services:
+  nav8:
+    image: ghcr.io/truelife0958/nav8:latest
+    container_name: nav8
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://nav8:nav8pass@postgres:5432/nav8
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=your_secure_password
+      - JWT_SECRET=your_random_secret_key
+      - NODE_ENV=production
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: nav8-postgres
+    environment:
+      - POSTGRES_USER=nav8
+      - POSTGRES_PASSWORD=nav8pass
+      - POSTGRES_DB=nav8
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:
 ```
 
-### 3. 查看日志
+### 常用命令
 
 ```bash
+# 启动
+docker-compose up -d
+
+# 查看日志
 docker-compose logs -f
-```
 
-### 4. 更新镜像
+# 更新镜像
+docker-compose pull && docker-compose up -d
 
-```bash
-docker-compose pull
-docker-compose up -d
+# 停止
+docker-compose down
 ```
 
 ---
@@ -147,7 +209,7 @@ docker-compose up -d
 
 ### 环境要求
 
-- Node.js **18/20/22 LTS**（不要使用 23/24/25 这类非 LTS，可能导致 `sqlite3`/`bcrypt` 原生模块无法加载）
+- Node.js **18/20/22 LTS**（不要使用 23+ 非 LTS 版本）
 - npm >= 8
 
 ### 1. 克隆项目
@@ -164,18 +226,20 @@ cd nav8
 npm install
 
 # 前端依赖并构建
-cd web
-npm install
-npm run build
-cd ..
+cd web && npm install && npm run build && cd ..
 ```
 
-### 3. 配置环境变量（可选）
+### 3. 配置环境变量
 
 ```bash
-export ADMIN_USERNAME=admin
-export ADMIN_PASSWORD=your_secure_password
-export PORT=3000
+# 创建 .env 文件（可选）
+cat > .env << EOF
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your_secure_password
+JWT_SECRET=your_random_secret_key
+PORT=3000
+NODE_ENV=production
+EOF
 ```
 
 ### 4. 启动服务
@@ -184,7 +248,7 @@ export PORT=3000
 npm start
 ```
 
-### 5. 使用 PM2 守护进程（生产环境推荐）
+### 5. PM2 守护进程（生产环境推荐）
 
 ```bash
 # 安装 PM2
@@ -202,7 +266,7 @@ pm2 save
 
 ## 反向代理配置
 
-### Nginx 配置
+### Nginx
 
 ```nginx
 server {
@@ -217,12 +281,11 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # 上传文件大小限制
     client_max_body_size 10M;
 }
 ```
 
-### Nginx + SSL (HTTPS)
+### Nginx + HTTPS
 
 ```nginx
 server {
@@ -250,7 +313,7 @@ server {
 }
 ```
 
-### Caddy 配置
+### Caddy
 
 ```caddyfile
 your-domain.com {
@@ -262,23 +325,23 @@ your-domain.com {
 
 ## 数据备份与恢复
 
-### 备份
+### 通过后台管理（推荐）
+
+1. 登录后台 → 数据备份
+2. 点击「导出数据」下载 JSON 备份文件
+3. 恢复时点击「导入数据」上传备份文件
+
+> 导入操作使用事务保护，失败时自动回滚，不会造成数据损坏。
+
+### 命令行备份
 
 ```bash
 # 备份数据库和上传文件
 tar -czvf nav8-backup-$(date +%Y%m%d).tar.gz database/ uploads/
-```
 
-### 恢复
-
-```bash
-# 停止服务
+# 恢复
 docker-compose down
-
-# 解压备份
 tar -xzvf nav8-backup-20231201.tar.gz
-
-# 启动服务
 docker-compose up -d
 ```
 
@@ -288,101 +351,62 @@ docker-compose up -d
 
 ### 批量导入书签
 
-支持从浏览器导出的书签文件批量导入：
-
-1. 进入后台管理 → 卡片管理
-2. 点击「导入书签」按钮
-3. 选择目标菜单和子菜单
-4. 上传书签文件（支持 HTML 和 JSON 格式）
-5. 点击「开始导入」
-
-**支持的格式：**
-- Chrome/Edge 导出的 HTML 书签文件
-- Firefox 导出的 HTML 书签文件
-- JSON 格式书签文件
+1. 后台管理 → 卡片管理 → 导入书签
+2. 选择目标菜单和子菜单
+3. 上传书签文件（支持 Chrome/Edge/Firefox HTML 格式）
 
 ### 批量操作
 
-- **批量删除**：勾选多个卡片后点击「批量删除」
-- **批量移动**：勾选多个卡片后选择目标菜单，点击「批量移动」
+- **批量删除**：勾选卡片后点击「批量删除」
+- **批量移动**：勾选卡片后选择目标菜单
+- **死链检测**：检测卡片链接是否有效
 
 ---
 
 ## 常见问题
 
-### Q: 镜像拉取失败？
+### Q: 首次启动密码是什么？
 
-**原因：** GHCR 包默认是私有的
+启动服务后查看控制台日志，会打印生成的随机密码：
+```
+🔐 Default admin password generated: a1b2c3d4e5f6g7h8
+```
 
-**解决方案：**
-1. 登录 GitHub
-2. 进入仓库 Settings → Packages
-3. 找到 nav8 包，点击 Package settings
-4. 在 Danger Zone 中将 visibility 改为 Public
+### Q: 忘记管理员密码？
 
-或者使用源码部署方式。
-
-### Q: 忘记管理员密码怎么办？
-
-重新启动容器并设置新密码：
+重新设置 `ADMIN_PASSWORD` 环境变量并重启：
 
 ```bash
 docker rm -f nav8
-docker run -d \
-  --name nav8 \
-  -p 3000:3000 \
-  -v $(pwd)/database:/app/database \
-  -v $(pwd)/uploads:/app/uploads \
-  -e ADMIN_PASSWORD=new_password \
-  ghcr.io/truelife0958/nav8:latest
+docker run -d --name nav8 ... -e ADMIN_PASSWORD=new_password ...
 ```
+
+### Q: 每次重启后需要重新登录？
+
+设置固定的 `JWT_SECRET` 环境变量：
+
+```bash
+-e JWT_SECRET=your_fixed_secret_key
+```
+
+### Q: 镜像拉取失败？
+
+GHCR 包可能是私有的。解决方案：
+1. GitHub 仓库 Settings → Packages → nav8
+2. Package settings → 将 visibility 改为 Public
 
 ### Q: 如何修改端口？
 
-**Docker 方式：** 修改 `-p` 参数，如 `-p 8080:3000`
-
-**源码方式：** 设置环境变量 `PORT=8080`
-
-### Q: 上传图片失败？
-
-1. 检查 `uploads` 目录权限
-2. 检查 Nginx `client_max_body_size` 配置
-3. 确保挂载了 uploads 目录
-
-### Q: 导入书签失败？
-
-1. 确保文件格式正确（HTML 或 JSON）
-2. 文件大小不超过 5MB
-3. 检查书签文件是否包含有效的 URL
-
-### Q: 如何查看日志？
-
-```bash
-# Docker
-docker logs -f nav8
-
-# PM2
-pm2 logs nav8
-```
+- Docker：修改 `-p` 参数，如 `-p 8080:3000`
+- 源码：设置 `PORT=8080` 环境变量
 
 ### Q: 数据库损坏怎么办？
 
 1. 停止服务
-2. 备份当前数据库文件
+2. 备份当前 `database/nav.db`
 3. 删除 `database/nav.db`
-4. 重启服务（会自动创建新数据库）
-
----
-
-## Zeabur（已弃用）
-
-Zeabur 部署在本项目中曾遇到连接/健康检查相关问题，当前不再作为推荐方案。
-
-如仍需使用 Zeabur，可参考历史配置要点：
-
-| 变量名 | 值 | 说明 |
-|--------|-----|------|
-| `DATABASE_URL` | `${POSTGRES_URI}` | Zeabur 内置 Postgres 变量引用 |
+4. 重启服务（自动创建新数据库）
+5. 通过后台「数据备份」功能导入之前的备份
 
 ---
 
@@ -390,14 +414,6 @@ Zeabur 部署在本项目中曾遇到连接/健康检查相关问题，当前不
 
 - 首页: http://localhost:3000
 - 后台: http://localhost:3000/admin
-- 默认账号: admin / 123456（请及时修改）
-
-## 技术栈
-
-- **前端**: Vue 3 + Vite
-- **后端**: Node.js + Express
-- **数据库**: SQLite / PostgreSQL
-- **容器**: Docker
 
 ## 许可证
 

@@ -160,22 +160,44 @@ function validateFriend(data) {
   };
 }
 
-// 验证ID数组
+// Validate ID array
 function validateIdArray(ids, fieldName = 'ID') {
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     return { valid: false, error: `请选择要操作的${fieldName}` };
   }
-  
+
   const validIds = ids.filter(id => isPositiveInteger(id)).map(Number);
-  
+
   if (validIds.length === 0) {
     return { valid: false, error: `无效的${fieldName}` };
   }
-  
+
   return { valid: true, ids: validIds };
 }
 
-// 异步错误包装器
+// Process card display_logo - DRY: extracted common logic
+function processCardDisplayLogo(card) {
+  let display_logo = '/default-favicon.png';
+  try {
+    if (card.custom_logo_path) {
+      display_logo = '/uploads/' + card.custom_logo_path;
+    } else if (card.logo_url) {
+      display_logo = card.logo_url;
+    } else if (card.url) {
+      display_logo = card.url.replace(/\/+$/, '') + '/favicon.ico';
+    }
+  } catch (e) {
+    // Keep default icon on error
+  }
+  return { ...card, display_logo };
+}
+
+// Process multiple cards with display_logo
+function processCardsWithDisplayLogo(cards) {
+  return (cards || []).map(processCardDisplayLogo);
+}
+
+// Async error wrapper for Express routes
 function asyncHandler(fn) {
   return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
@@ -193,5 +215,7 @@ module.exports = {
   validateAd,
   validateFriend,
   validateIdArray,
+  processCardDisplayLogo,
+  processCardsWithDisplayLogo,
   asyncHandler
 };

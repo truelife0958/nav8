@@ -264,7 +264,82 @@ class Database {
   // --- Unified Interface ---
 
   /**
-   * 执行查询并返回所有行 (SELECT)
+   * Execute a function within a transaction
+   * Automatically commits on success, rolls back on error
+   * @param {Function} fn - Async function to execute within transaction
+   * @returns {Promise<any>} - Result of fn
+   */
+  async transaction(fn) {
+    if (this.isPostgres) {
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        // Create a transaction-scoped db interface
+        const txDb = {
+          run: async (sql, params) => this.queryPostgresWithClient(client, sql, params),
+          get: async (sql, params) => {
+            const rows = await this.queryPostgresWithClient(client, sql, params);
+            return Array.isArray(rows) ? rows[0] : rows;
+          },
+          all: async (sql, params) => this.queryPostgresWithClient(client, sql, params),
+          query: async (sql, params) => this.queryPostgresWithClient(client, sql, params),
+          isPostgres: true
+        };
+        const result = await fn(txDb);
+        await client.query('COMMIT');
+        return result;
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    } else {
+      // SQLite transaction
+      await this.run('BEGIN TRANSACTION');
+      try {
+        const result = await fn(this);
+        await this.run('COMMIT');
+        return result;
+      } catch (err) {
+        await this.run('ROLLBACK');
+        throw err;
+      }
+    }
+  }
+
+  // PostgreSQL query with specific client (for transactions)
+  async queryPostgresWithClient(client, sql, params = []) {
+    const isInsert = /^\s*insert\s+into\s+/i.test(sql);
+    const hasReturning = /\breturning\b/i.test(sql);
+    let finalSql = sql;
+
+    if (isInsert && !hasReturning) {
+      finalSql += ' RETURNING id';
+    }
+
+    const converted = this.convertQuery(finalSql, params);
+
+    let queryConfig;
+    if (this.useExtendedProtocol) {
+      queryConfig = { text: converted.sql, values: converted.params };
+    } else {
+      queryConfig = this.interpolatePgParams(converted.sql, converted.params);
+    }
+
+    const result = await client.query(queryConfig);
+
+    if (isInsert) {
+      return { lastID: result.rows[0]?.id || null, changes: result.rowCount };
+    }
+    if (/^\s*(update|delete)\s+/i.test(sql)) {
+      return { changes: result.rowCount };
+    }
+    return result.rows;
+  }
+
+  /**
+   * Execute queries and return all rows (SELECT)
    * @returns {Promise<Array>}
    */
   async query(sql, params = []) {

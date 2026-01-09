@@ -1,10 +1,18 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const crypto = require('crypto');
 const auth = require('./authMiddleware');
 const router = express.Router();
 
-// 允许的文件类型
+// Generate unique filename to avoid collisions
+const generateUniqueFilename = (ext) => {
+  const timestamp = Date.now();
+  const randomStr = crypto.randomBytes(6).toString('hex'); // 12 char random string
+  return `${timestamp}-${randomStr}${ext}`;
+};
+
+// Allowed file types
 const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/x-icon'];
 const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.ico'];
 
@@ -14,7 +22,7 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, Date.now() + ext);
+    cb(null, generateUniqueFilename(ext));
   }
 });
 

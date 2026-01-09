@@ -1,16 +1,16 @@
 <template>
   <div class="home-container">
     <Toast :message="toast.message" :type="toast.type" v-model:show="toast.show" />
-    <Loading :show="loading" text="加载中..." />
+
     <div class="menu-bar-fixed">
       <MenuBar
-        :menus="menus"
+        :menus="visibleMenus"
         :activeId="activeMenu?.id"
         :activeSubMenuId="activeSubMenu?.id"
         @select="selectMenu"
       />
     </div>
-    
+
     <div class="search-section">
       <div class="search-box-wrapper">
         <div class="search-engine-select">
@@ -58,7 +58,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- 左侧广告条 -->
     <div v-if="leftAds.length" class="ad-space-fixed left-ad-fixed">
       <a v-for="ad in leftAds" :key="ad.id" :href="ad.url" target="_blank">
@@ -71,18 +71,19 @@
         <img :src="ad.img" alt="广告" />
       </a>
     </div>
-    
+
     <!-- 子菜单横向滑动区域 -->
-    <div v-if="currentSubMenus.length > 0 && !isSearching" class="sub-menu-section">
+    <div v-if="visibleSubMenus.length > 0 && !isSearching" class="sub-menu-section">
       <div class="sub-menu-scroll">
         <button
+          v-if="hasMainCategoryCards"
           @click="selectMainCategory"
           :class="['sub-menu-btn', { active: activeSubMenu === null }]"
         >
           常用访问
         </button>
         <button
-          v-for="subMenu in currentSubMenus"
+          v-for="subMenu in visibleSubMenus"
           :key="subMenu.id"
           @click="selectSubMenu(subMenu)"
           :class="['sub-menu-btn', { active: activeSubMenu?.id === subMenu.id }]"
@@ -98,9 +99,30 @@
       <p>搜索结果: "{{ searchQuery }}"</p>
       <button @click="exitSearch" class="exit-search-btn">退出搜索</button>
     </div>
-    
-    <CardGrid :cards="displayCards"/>
-    
+
+    <!-- 卡片区域 - 带过渡动画 -->
+    <Transition name="fade" mode="out-in">
+      <div :key="cardKey" class="card-wrapper">
+        <!-- 骨架屏 - 仅首次加载时显示 -->
+        <div v-if="initialLoading" class="skeleton-grid">
+          <div v-for="i in 12" :key="i" class="skeleton-card">
+            <div class="skeleton-icon"></div>
+            <div class="skeleton-text"></div>
+          </div>
+        </div>
+        <!-- 内联加载指示器 - 切换时显示 -->
+        <div v-else-if="loadingCards" class="inline-loading">
+          <div class="inline-spinner"></div>
+        </div>
+        <!-- 空状态 -->
+        <div v-else-if="displayCards.length === 0 && !isSearching" class="empty-state">
+          <p>暂无内容</p>
+        </div>
+        <!-- 卡片列表 -->
+        <CardGrid v-else :cards="displayCards"/>
+      </div>
+    </Transition>
+
     <footer class="footer">
       <div class="footer-content">
         <div class="footer-links">
@@ -169,7 +191,6 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { getMenus, getCards, getAds, getFriends, searchCards, recordVisit, getErrorMessage } from '../api';
 import MenuBar from '../components/MenuBar.vue';
 import CardGrid from '../components/CardGrid.vue';
-import Loading from '../components/Loading.vue';
 import Toast from '../components/Toast.vue';
 
 const menus = ref([]);
@@ -185,7 +206,20 @@ const leftAds = ref([]);
 const rightAds = ref([]);
 const showFriendLinks = ref(false);
 const friendLinks = ref([]);
-const loading = ref(false);
+
+// 优化：区分首次加载和切换加载
+const initialLoading = ref(true);
+const loadingCards = ref(false);
+
+// 缓存：存储已加载的卡片数据
+const cardsCache = ref(new Map());
+
+// 用于触发过渡动画的key
+const cardKey = computed(() => {
+  if (isSearching.value) return 'search';
+  if (!activeMenu.value) return 'none';
+  return `${activeMenu.value.id}-${activeSubMenu.value?.id || 'main'}`;
+});
 
 const toast = ref({ show: false, message: '', type: 'info' });
 const brokenFriendLogoIds = ref(new Set());
@@ -292,90 +326,156 @@ function hideHistoryDelayed() {
 function exitSearch() {
   isSearching.value = false;
   searchResults.value = [];
-  // 恢复之前的卡片显示
-  if (activeMenu.value) {
-    // 触发重新加载
-    // 这里因为 displayCards 依赖 cards，只要 isSearching 变 false 就会显示 cards
-    // 除非我们想确保 cards 是最新的
-  }
 }
 
-// 显示的卡片：如果是搜索模式显示搜索结果，否则显示当前分类的卡片
-// 前端搜索过滤逻辑：如果没在搜索模式，但输入框有字且是站内搜索，可以保留原有前端过滤作为即时反馈？
-// 这里为了简洁，统一逻辑：搜索模式下显示 searchResults，普通模式下显示 cards (并应用前端过滤? 不，现在用后端搜索)
+// 显示的卡片
 const displayCards = computed(() => {
   if (isSearching.value) return searchResults.value;
-  // 非搜索模式下，如果用户在输入框打字但没按回车（即时过滤）
-  // 为了性能，我们仅在按下回车后触发搜索
   return cards.value;
 });
 
-// 当前主菜单的子菜单列表
-const currentSubMenus = computed(() => {
-  return activeMenu.value?.subMenus || [];
+// 过滤空分类：只显示有卡片的主菜单
+const visibleMenus = computed(() => {
+  return menus.value.filter(menu => {
+    // 检查主菜单本身是否有卡片（缓存中）
+    const mainKey = `${menu.id}-main`;
+    const mainCards = cardsCache.value.get(mainKey);
+    if (mainCards && mainCards.length > 0) return true;
+
+    // 检查子菜单是否有卡片
+    if (menu.subMenus && menu.subMenus.length > 0) {
+      for (const sub of menu.subMenus) {
+        const subKey = `${menu.id}-${sub.id}`;
+        const subCards = cardsCache.value.get(subKey);
+        if (subCards && subCards.length > 0) return true;
+      }
+    }
+
+    // 如果还没加载过，暂时显示（等加载后再过滤）
+    if (!cardsCache.value.has(mainKey)) return true;
+
+    return false;
+  });
 });
+
+// 过滤空子菜单：只显示有卡片的子菜单
+const visibleSubMenus = computed(() => {
+  if (!activeMenu.value?.subMenus) return [];
+
+  return activeMenu.value.subMenus.filter(sub => {
+    const subKey = `${activeMenu.value.id}-${sub.id}`;
+    const subCards = cardsCache.value.get(subKey);
+    // 如果还没加载过，暂时显示
+    if (!cardsCache.value.has(subKey)) return true;
+    return subCards && subCards.length > 0;
+  });
+});
+
+// 检查主分类是否有卡片
+const hasMainCategoryCards = computed(() => {
+  if (!activeMenu.value) return false;
+  const mainKey = `${activeMenu.value.id}-main`;
+  const mainCards = cardsCache.value.get(mainKey);
+  if (!cardsCache.value.has(mainKey)) return true; // 还没加载，先显示
+  return mainCards && mainCards.length > 0;
+});
+
+// 获取缓存key
+function getCacheKey(menuId, subMenuId) {
+  return `${menuId}-${subMenuId || 'main'}`;
+}
 
 onMounted(async () => {
   loadSearchHistory();
-  loading.value = true;
+
   try {
-    const res = await getMenus();
-    menus.value = res.data;
-    if (menus.value.length) {
-      activeMenu.value = menus.value[0];
-      // 默认显示主菜单下的卡片（常用访问）
-      activeSubMenu.value = null;
-      await loadCards();
-    }
-  } catch (error) {
-    console.error('加载菜单失败:', error);
-    showToast('加载菜单失败：' + getErrorMessage(error), 'error');
-  }
-  
-  // 加载广告
-  try {
-    const adRes = await getAds();
+    // 并行加载菜单、广告、友链
+    const [menuRes, adRes, friendRes] = await Promise.all([
+      getMenus(),
+      getAds().catch(() => ({ data: [] })),
+      getFriends().catch(() => ({ data: [] }))
+    ]);
+
+    menus.value = menuRes.data;
     leftAds.value = adRes.data.filter(ad => ad.position === 'left');
     rightAds.value = adRes.data.filter(ad => ad.position === 'right');
-  } catch (error) {
-    console.error('加载广告失败:', error);
-    showToast('加载广告失败：' + getErrorMessage(error), 'warning');
-  }
-  
-  try {
-    const friendRes = await getFriends();
     friendLinks.value = friendRes.data;
+
+    if (menus.value.length) {
+      activeMenu.value = menus.value[0];
+      activeSubMenu.value = null;
+
+      // 预加载第一个菜单的所有卡片（主分类+子分类）
+      await preloadMenuCards(activeMenu.value);
+    }
   } catch (error) {
-    console.error('加载友链失败:', error);
-    showToast('加载友链失败：' + getErrorMessage(error), 'warning');
+    console.error('加载数据失败:', error);
+    showToast('加载数据失败：' + getErrorMessage(error), 'error');
+  } finally {
+    initialLoading.value = false;
   }
-  loading.value = false;
-  
+
   // 记录访问
   recordVisit().catch(() => {});
 });
 
+// 预加载菜单的所有卡片
+async function preloadMenuCards(menu) {
+  const promises = [];
+
+  // 加载主分类卡片
+  const mainKey = getCacheKey(menu.id, null);
+  if (!cardsCache.value.has(mainKey)) {
+    promises.push(
+      getCards(menu.id, null)
+        .then(res => {
+          cardsCache.value.set(mainKey, res.data);
+          // 如果是当前选中的，更新显示
+          if (activeMenu.value?.id === menu.id && !activeSubMenu.value) {
+            cards.value = res.data;
+          }
+        })
+        .catch(() => cardsCache.value.set(mainKey, []))
+    );
+  }
+
+  // 加载所有子分类卡片
+  if (menu.subMenus) {
+    for (const sub of menu.subMenus) {
+      const subKey = getCacheKey(menu.id, sub.id);
+      if (!cardsCache.value.has(subKey)) {
+        promises.push(
+          getCards(menu.id, sub.id)
+            .then(res => cardsCache.value.set(subKey, res.data))
+            .catch(() => cardsCache.value.set(subKey, []))
+        );
+      }
+    }
+  }
+
+  await Promise.all(promises);
+}
+
 async function selectMenu(menu, parentMenu = null) {
-  exitSearch(); // 切换菜单时退出搜索状态
+  exitSearch();
+
   if (parentMenu) {
     activeMenu.value = parentMenu;
     activeSubMenu.value = menu;
   } else {
     activeMenu.value = menu;
-    // 默认显示主菜单下的卡片（常用访问）
     activeSubMenu.value = null;
   }
+
   await loadCards();
 }
 
-// 选择子菜单
 async function selectSubMenu(subMenu) {
   exitSearch();
   activeSubMenu.value = subMenu;
   await loadCards();
 }
 
-// 选择主分类（常用访问）
 async function selectMainCategory() {
   exitSearch();
   activeSubMenu.value = null;
@@ -384,14 +484,47 @@ async function selectMainCategory() {
 
 async function loadCards() {
   if (!activeMenu.value) return;
-  loading.value = true;
+
+  const cacheKey = getCacheKey(activeMenu.value.id, activeSubMenu.value?.id);
+
+  // 优先使用缓存
+  if (cardsCache.value.has(cacheKey)) {
+    cards.value = cardsCache.value.get(cacheKey);
+    // 后台静默刷新缓存
+    refreshCache(cacheKey);
+    return;
+  }
+
+  // 没有缓存，显示加载状态
+  loadingCards.value = true;
   try {
     const res = await getCards(activeMenu.value.id, activeSubMenu.value?.id);
     cards.value = res.data;
+    cardsCache.value.set(cacheKey, res.data);
+
+    // 预加载当前菜单的其他子分类
+    preloadMenuCards(activeMenu.value);
   } catch (error) {
     console.error('加载卡片失败:', error);
+    cards.value = [];
   } finally {
-    loading.value = false;
+    loadingCards.value = false;
+  }
+}
+
+// 后台静默刷新缓存
+async function refreshCache(cacheKey) {
+  try {
+    const [menuId, subId] = cacheKey.split('-');
+    const subMenuId = subId === 'main' ? null : parseInt(subId);
+    const res = await getCards(parseInt(menuId), subMenuId);
+    cardsCache.value.set(cacheKey, res.data);
+    // 如果还是当前显示的，更新数据
+    if (getCacheKey(activeMenu.value?.id, activeSubMenu.value?.id) === cacheKey) {
+      cards.value = res.data;
+    }
+  } catch (e) {
+    // 静默失败，不影响用户体验
   }
 }
 
@@ -400,12 +533,12 @@ async function handleSearch() {
     showToast('请输入搜索内容', 'warning');
     return;
   }
-  
+
   saveSearchHistory(searchQuery.value.trim());
   showHistory.value = false;
-  
+
   if (selectedEngine.value.name === 'site') {
-    loading.value = true;
+    loadingCards.value = true;
     try {
       const res = await searchCards(searchQuery.value);
       searchResults.value = res.data;
@@ -417,7 +550,7 @@ async function handleSearch() {
       console.error('搜索出错:', error);
       showToast('搜索出错：' + getErrorMessage(error), 'error');
     } finally {
-      loading.value = false;
+      loadingCards.value = false;
     }
   } else {
     const url = selectedEngine.value.url(searchQuery.value);
@@ -433,8 +566,6 @@ async function handleSearch() {
   left: 0;
   width: 100vw;
   z-index: 100;
-  /* background: rgba(0,0,0,0.6); /* 可根据需要调整 */
-  /* backdrop-filter: blur(8px);  /*  毛玻璃效果 */
 }
 
 .search-engine-select {
@@ -704,6 +835,103 @@ async function handleSearch() {
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* 卡片区域包装器 */
+.card-wrapper {
+  position: relative;
+  z-index: 2;
+  min-height: 200px;
+}
+
+/* 过渡动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* 骨架屏样式 */
+.skeleton-grid {
+  max-width: 55rem;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 15px;
+  padding: 0 1rem;
+}
+
+@media (max-width: 1200px) {
+  .skeleton-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 768px) {
+  .skeleton-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.skeleton-card {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-height: 85px;
+}
+
+.skeleton-icon {
+  width: 25px;
+  height: 25px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-text {
+  width: 60%;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  animation-delay: 0.2s;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* 内联加载指示器 */
+.inline-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+.inline-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #399dff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 40px;
+  font-size: 16px;
+}
+
 .footer {
   margin-top: auto;
   text-align: center;
@@ -951,7 +1179,7 @@ async function handleSearch() {
 
 @media (max-width: 1200px) {
   .ad-space-fixed {
-     /* display: none; */ /* 1200px以下可能也要考虑隐藏或缩小 */
+     /* display: none; */
   }
 }
 
@@ -959,41 +1187,40 @@ async function handleSearch() {
   .home-container {
     padding-top: 80px;
   }
-  
-  /* 移动端隐藏侧边广告，避免遮挡内容 */
+
   .ad-space-fixed {
     display: none;
   }
-  
+
   .footer {
     padding: 1rem 0.5rem 1.5rem;
   }
-  
+
   .footer-content {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .footer-links {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 16px;
   }
-  
+
   .friend-link-btn,
   .admin-link-btn {
     font-size: 12px;
     padding: 4px 8px;
     gap: 4px;
   }
-  
+
   .friend-link-btn svg,
   .admin-link-btn svg {
     width: 14px;
     height: 14px;
   }
-  
+
   .copyright {
     color: rgba(255, 255, 255, 0.75);
     font-size: 11px;

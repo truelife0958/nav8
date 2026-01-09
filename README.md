@@ -13,8 +13,9 @@
 - 🎨 毛玻璃效果 UI，多种卡片动画
 - 📋 栏目/卡片/广告/友链管理
 - 📥 批量导入浏览器书签（HTML/JSON）
-- 💾 数据备份与恢复
-- 🔐 JWT认证 + 请求限流保护
+- 💾 数据备份与恢复（事务支持，保证数据一致性）
+- 🔐 JWT认证 + 请求限流 + 安全默认配置
+- 📊 访问统计（PV/UV）
 
 ## 🛠️ 技术栈
 
@@ -34,7 +35,8 @@ docker run -d \
   -v $(pwd)/database:/app/database \
   -v $(pwd)/uploads:/app/uploads \
   -e ADMIN_USERNAME=admin \
-  -e ADMIN_PASSWORD=your_password \
+  -e ADMIN_PASSWORD=your_secure_password \
+  -e JWT_SECRET=your_random_secret_key \
   ghcr.io/truelife0958/nav8:latest
 ```
 
@@ -50,7 +52,8 @@ services:
       - "3000:3000"
     environment:
       - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=your_password
+      - ADMIN_PASSWORD=your_secure_password
+      - JWT_SECRET=your_random_secret_key
     volumes:
       - ./database:/app/database
       - ./uploads:/app/uploads
@@ -67,7 +70,8 @@ services:
     environment:
       - DATABASE_URL=postgres://user:pass@postgres:5432/nav8
       - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=your_password
+      - ADMIN_PASSWORD=your_secure_password
+      - JWT_SECRET=your_random_secret_key
     ports:
       - "3000:3000"
     depends_on:
@@ -107,32 +111,41 @@ npm start
 |--------|------|--------|
 | `PORT` | 服务端口 | `3000` |
 | `ADMIN_USERNAME` | 管理员用户名 | `admin` |
-| `ADMIN_PASSWORD` | 管理员密码 | `123456` |
-| `JWT_SECRET` | JWT密钥 | 内置默认值 |
+| `ADMIN_PASSWORD` | 管理员密码 | **随机生成**（首次启动时打印） |
+| `JWT_SECRET` | JWT签名密钥 | **随机生成**（重启后token失效） |
 | `DATABASE_URL` | PostgreSQL连接串 | 空（使用SQLite） |
+| `CORS_ORIGIN` | 允许的跨域来源 | 开发模式`*`，生产模式同源 |
+| `NODE_ENV` | 运行环境 | `development` |
+
+### 🔐 安全说明
+
+- **首次启动**：如未设置 `ADMIN_PASSWORD`，系统会生成随机密码并打印到控制台
+- **生产环境**：强烈建议设置 `ADMIN_PASSWORD` 和 `JWT_SECRET` 环境变量
+- **JWT密钥**：未设置时每次重启会生成新密钥，导致所有已登录用户需重新登录
 
 ## 📁 项目结构
 
 ```
 nav8/
 ├── app.js              # 后端入口
-├── config.js           # 配置文件
-├── db.js               # 数据库（SQLite/PostgreSQL双模式）
+├── config.js           # 配置文件（安全默认值）
+├── db.js               # 数据库层（SQLite/PostgreSQL + 事务支持）
 ├── routes/             # API路由
 │   ├── auth.js         # 登录认证
-│   ├── menu.js         # 菜单管理
+│   ├── menu.js         # 菜单管理（优化N+1查询）
 │   ├── card.js         # 卡片管理
-│   ├── ad.js           # 广告管理
-│   ├── friend.js       # 友链管理
-│   ├── import.js       # 书签导入
-│   ├── backup.js       # 数据备份
-│   └── upload.js       # 文件上传
+│   ├── backup.js       # 数据备份（事务保护）
+│   ├── stats.js        # 访问统计
+│   └── ...
 ├── utils/              # 工具函数
+│   ├── validator.js    # 输入验证
+│   └── bcrypt.js       # 密码加密
 ├── uploads/            # 上传文件
-├── web/                # 前端项目
+├── web/                # 前端项目（Vue 3）
 │   ├── src/
 │   │   ├── components/ # 组件
 │   │   └── views/      # 页面
+│   ├── public/         # 静态资源（PWA）
 │   └── dist/           # 构建输出
 └── database/           # SQLite数据库
 ```
@@ -141,7 +154,7 @@ nav8/
 
 - 首页: http://localhost:3000
 - 后台: http://localhost:3000/admin
-- 默认账号: admin / 123456
+- 默认账号: admin / （首次启动时查看控制台输出）
 
 ## 📄 许可证
 

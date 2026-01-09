@@ -24,9 +24,10 @@ services:
       - "3000:3000"
     environment:
       - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=123456
+      - ADMIN_PASSWORD=change_me_to_secure_password
+      - JWT_SECRET=change_me_to_random_secret_key
       - DATABASE_URL=postgresql://nav8:nav8password@postgres:5432/nav8
-      - JWT_SECRET=your-secure-jwt-secret-change-in-production
+      - NODE_ENV=production
     volumes:
       - ./uploads:/app/uploads
     depends_on:

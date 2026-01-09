@@ -3,31 +3,45 @@ const db = require('../db');
 const auth = require('./authMiddleware');
 const router = express.Router();
 
-// 获取今日日期 YYYY-MM-DD
+// Get today's date YYYY-MM-DD
 function getToday() {
   return new Date().toISOString().split('T')[0];
 }
 
-// 记录访问（公开接口）
+// Record visit (public API)
 router.post('/visit', async (req, res) => {
   const today = getToday();
-  const visitorId = req.headers['x-visitor-id'] || req.ip;
-  
+
   try {
-    // 检查今日记录是否存在
+    // Check if today's record exists
     let record = await db.get('SELECT * FROM visits WHERE date = ?', [today]);
-    
+
+    // Check if this is a new visitor using cookie
+    // req.cookies is now available thanks to cookie-parser middleware
+    const lastVisitDate = req.cookies?.nav8_visited;
+    const isNewVisitor = lastVisitDate !== today;
+
     if (!record) {
       await db.run('INSERT INTO visits (date, pv, uv) VALUES (?, 1, 1)', [today]);
     } else {
-      // 使用简单的 cookie/header 判断是否新访客
-      const isNewVisitor = req.cookies?.visited !== today;
       await db.run(
         'UPDATE visits SET pv = pv + 1, uv = uv + ? WHERE date = ?',
         [isNewVisitor ? 1 : 0, today]
       );
     }
-    
+
+    // Set cookie to track visitor for UV calculation
+    // Cookie expires at end of day (midnight)
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    res.cookie('nav8_visited', today, {
+      expires: endOfDay,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production'
+    });
+
     res.json({ success: true });
   } catch (err) {
     console.error('记录访问失败:', err);
