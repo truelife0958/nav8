@@ -8,6 +8,13 @@ function getToday() {
   return new Date().toISOString().split('T')[0];
 }
 
+// Get date N days ago YYYY-MM-DD
+function getDateDaysAgo(days) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().split('T')[0];
+}
+
 // Record visit (public API)
 router.post('/visit', async (req, res) => {
   const today = getToday();
@@ -60,9 +67,11 @@ router.get('/summary', auth, async (req, res) => {
     // 总计数据
     const totalStats = await db.get('SELECT SUM(pv) as totalPv, SUM(uv) as totalUv FROM visits') || { totalPv: 0, totalUv: 0 };
     
-    // 最近7天数据
+    // 最近7天数据 (用JS算日期，兼容SQLite和PostgreSQL)
+    const weekAgo = getDateDaysAgo(7);
     const weekData = await db.all(
-      `SELECT date, pv, uv FROM visits WHERE date >= date('now', '-7 days') ORDER BY date DESC`
+      `SELECT date, pv, uv FROM visits WHERE date >= ? ORDER BY date DESC`,
+      [weekAgo]
     ) || [];
     
     // 卡片总数
