@@ -427,6 +427,13 @@ class Database {
         pv INTEGER DEFAULT 0,
         uv INTEGER DEFAULT 0,
         UNIQUE(date)
+      )`,
+      `CREATE TABLE IF NOT EXISTS card_clicks (
+        id ${this.isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+        card_id INTEGER NOT NULL ${this.isPostgres ? 'REFERENCES cards(id) ON DELETE CASCADE' : ''},
+        clicks INTEGER DEFAULT 0,
+        UNIQUE(card_id)
+        ${!this.isPostgres ? ', FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE' : ''}
       )`
     ];
 

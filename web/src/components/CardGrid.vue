@@ -1,9 +1,9 @@
 <template>
   <div class="container card-grid" :class="animationClass">
-    <div v-for="(card, index) in cards" :key="card.id" 
-         class="link-item" 
+    <div v-for="(card, index) in cards" :key="card.id"
+         class="link-item"
          :style="getCardStyle(index)">
-      <a :href="card.url" target="_blank" :title="getTooltip(card)">
+      <a :href="card.url" target="_blank" :title="getTooltip(card)" @click="handleCardClick(card)">
         <img class="link-icon" :src="getLogo(card)" alt="" @error="onImgError($event, card)" loading="lazy">
         <span class="link-text">{{ truncate(card.title) }}</span>
       </a>
@@ -13,6 +13,7 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue';
+import { recordCardClick } from '../api';
 
 const props = defineProps({ cards: Array });
 
@@ -147,6 +148,13 @@ function getTooltip(card) {
 function truncate(str) {
   if (!str) return '';
   return str.length > 20 ? str.slice(0, 20) + '...' : str;
+}
+
+// 记录卡片点击（静默，不影响跳转）
+function handleCardClick(card) {
+  if (card?.id) {
+    recordCardClick(card.id).catch(() => {});
+  }
 }
 </script>
 

@@ -65,11 +65,18 @@ function showToast(message, type = 'info') {
 onMounted(loadAds);
 
 async function loadAds() {
-  const res = await getAds();
-  // API 返回的可能是数组或包含 data 的对象
-  const ads = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-  leftAds.value = ads.filter(ad => ad.position === 'left');
-  rightAds.value = ads.filter(ad => ad.position === 'right');
+  try {
+    const res = await getAds();
+    // API 返回的可能是数组或包含 data 的对象
+    const ads = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+    leftAds.value = ads.filter(ad => ad.position === 'left');
+    rightAds.value = ads.filter(ad => ad.position === 'right');
+  } catch (error) {
+    console.error('加载广告失败:', error);
+    showToast('加载广告失败: ' + getErrorMessage(error), 'error');
+    leftAds.value = [];
+    rightAds.value = [];
+  }
 }
 
 async function handleAddAd() {

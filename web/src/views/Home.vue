@@ -110,10 +110,6 @@
             <div class="skeleton-text"></div>
           </div>
         </div>
-        <!-- 内联加载指示器 - 切换时显示 -->
-        <div v-else-if="loadingCards" class="inline-loading">
-          <div class="inline-spinner"></div>
-        </div>
         <!-- 空状态 -->
         <div v-else-if="displayCards.length === 0 && !isSearching" class="empty-state">
           <p>暂无内容</p>
@@ -207,12 +203,14 @@ const rightAds = ref([]);
 const showFriendLinks = ref(false);
 const friendLinks = ref([]);
 
-// 优化：区分首次加载和切换加载
+// 优化：只保留首次加载状态
 const initialLoading = ref(true);
-const loadingCards = ref(false);
 
 // 缓存：存储已加载的卡片数据
 const cardsCache = ref(new Map());
+
+// 标记所有菜单是否已预加载完成
+const allMenusPreloaded = ref(false);
 
 // 用于触发过渡动画的key
 const cardKey = computed(() => {
@@ -334,8 +332,11 @@ const displayCards = computed(() => {
   return cards.value;
 });
 
-// 过滤空分类：只显示有卡片的主菜单
+// 过滤空分类：只显示有卡片的主菜单（预加载完成后才过滤）
 const visibleMenus = computed(() => {
+  // 预加载未完成时显示所有菜单
+  if (!allMenusPreloaded.value) return menus.value;
+
   return menus.value.filter(menu => {
     // 检查主菜单本身是否有卡片（缓存中）
     const mainKey = `${menu.id}-main`;
@@ -351,32 +352,33 @@ const visibleMenus = computed(() => {
       }
     }
 
-    // 如果还没加载过，暂时显示（等加载后再过滤）
-    if (!cardsCache.value.has(mainKey)) return true;
-
     return false;
   });
 });
 
-// 过滤空子菜单：只显示有卡片的子菜单
+// 过滤空子菜单：只显示有卡片的子菜单（预加载完成后才过滤）
 const visibleSubMenus = computed(() => {
   if (!activeMenu.value?.subMenus) return [];
+
+  // 预加载未完成时显示所有子菜单
+  if (!allMenusPreloaded.value) return activeMenu.value.subMenus;
 
   return activeMenu.value.subMenus.filter(sub => {
     const subKey = `${activeMenu.value.id}-${sub.id}`;
     const subCards = cardsCache.value.get(subKey);
-    // 如果还没加载过，暂时显示
-    if (!cardsCache.value.has(subKey)) return true;
     return subCards && subCards.length > 0;
   });
 });
 
-// 检查主分类是否有卡片
+// 检查主分类是否有卡片（预加载完成后才判断）
 const hasMainCategoryCards = computed(() => {
   if (!activeMenu.value) return false;
+
+  // 预加载未完成时显示
+  if (!allMenusPreloaded.value) return true;
+
   const mainKey = `${activeMenu.value.id}-main`;
   const mainCards = cardsCache.value.get(mainKey);
-  if (!cardsCache.value.has(mainKey)) return true; // 还没加载，先显示
   return mainCards && mainCards.length > 0;
 });
 
@@ -405,8 +407,8 @@ onMounted(async () => {
       activeMenu.value = menus.value[0];
       activeSubMenu.value = null;
 
-      // 预加载第一个菜单的所有卡片（主分类+子分类）
-      await preloadMenuCards(activeMenu.value);
+      // 预加载所有菜单的卡片数据
+      await preloadAllMenuCards();
     }
   } catch (error) {
     console.error('加载数据失败:', error);
@@ -419,13 +421,13 @@ onMounted(async () => {
   recordVisit().catch(() => {});
 });
 
-// 预加载菜单的所有卡片
-async function preloadMenuCards(menu) {
+// 预加载所有菜单的卡片数据
+async function preloadAllMenuCards() {
   const promises = [];
 
-  // 加载主分类卡片
-  const mainKey = getCacheKey(menu.id, null);
-  if (!cardsCache.value.has(mainKey)) {
+  for (const menu of menus.value) {
+    // 加载主分类卡片
+    const mainKey = getCacheKey(menu.id, null);
     promises.push(
       getCards(menu.id, null)
         .then(res => {
@@ -437,13 +439,11 @@ async function preloadMenuCards(menu) {
         })
         .catch(() => cardsCache.value.set(mainKey, []))
     );
-  }
 
-  // 加载所有子分类卡片
-  if (menu.subMenus) {
-    for (const sub of menu.subMenus) {
-      const subKey = getCacheKey(menu.id, sub.id);
-      if (!cardsCache.value.has(subKey)) {
+    // 加载所有子分类卡片
+    if (menu.subMenus) {
+      for (const sub of menu.subMenus) {
+        const subKey = getCacheKey(menu.id, sub.id);
         promises.push(
           getCards(menu.id, sub.id)
             .then(res => cardsCache.value.set(subKey, res.data))
@@ -454,6 +454,7 @@ async function preloadMenuCards(menu) {
   }
 
   await Promise.all(promises);
+  allMenusPreloaded.value = true;
 }
 
 async function selectMenu(menu, parentMenu = null) {
@@ -487,32 +488,24 @@ async function loadCards() {
 
   const cacheKey = getCacheKey(activeMenu.value.id, activeSubMenu.value?.id);
 
-  // 优先使用缓存
+  // 优先使用缓存（预加载后肯定有缓存）
   if (cardsCache.value.has(cacheKey)) {
     cards.value = cardsCache.value.get(cacheKey);
-    // 后台静默刷新缓存
-    refreshCache(cacheKey);
     return;
   }
 
-  // 没有缓存，显示加载状态
-  loadingCards.value = true;
+  // 兜底：如果没有缓存，直接加载（不显示loading）
   try {
     const res = await getCards(activeMenu.value.id, activeSubMenu.value?.id);
     cards.value = res.data;
     cardsCache.value.set(cacheKey, res.data);
-
-    // 预加载当前菜单的其他子分类
-    preloadMenuCards(activeMenu.value);
   } catch (error) {
     console.error('加载卡片失败:', error);
     cards.value = [];
-  } finally {
-    loadingCards.value = false;
   }
 }
 
-// 后台静默刷新缓存
+// 后台静默刷新缓存（暂时不用，预加载已覆盖）
 async function refreshCache(cacheKey) {
   try {
     const [menuId, subId] = cacheKey.split('-');
@@ -538,7 +531,6 @@ async function handleSearch() {
   showHistory.value = false;
 
   if (selectedEngine.value.name === 'site') {
-    loadingCards.value = true;
     try {
       const res = await searchCards(searchQuery.value);
       searchResults.value = res.data;
@@ -549,8 +541,6 @@ async function handleSearch() {
     } catch (error) {
       console.error('搜索出错:', error);
       showToast('搜索出错：' + getErrorMessage(error), 'error');
-    } finally {
-      loadingCards.value = false;
     }
   } else {
     const url = selectedEngine.value.url(searchQuery.value);

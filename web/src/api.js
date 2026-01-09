@@ -145,4 +145,6 @@ export const importBackup = (data, overwrite = false) => api.post('/backup/impor
 
 // 统计API
 export const recordVisit = () => api.post('/stats/visit');
+export const recordCardClick = (cardId) => api.post(`/stats/click/${cardId}`);
 export const getStatsSummary = () => api.get('/stats/summary');
+export const getClickRanking = (limit = 20) => api.get('/stats/clicks/ranking', { params: { limit } });

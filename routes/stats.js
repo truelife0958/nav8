@@ -15,6 +15,50 @@ function getDateDaysAgo(days) {
   return date.toISOString().split('T')[0];
 }
 
+// Record card click (public API)
+router.post('/click/:cardId', async (req, res) => {
+  const cardId = parseInt(req.params.cardId);
+  if (!cardId || isNaN(cardId)) {
+    return res.status(400).json({ error: '无效的卡片ID' });
+  }
+
+  try {
+    // Check if record exists
+    const record = await db.get('SELECT * FROM card_clicks WHERE card_id = ?', [cardId]);
+
+    if (!record) {
+      await db.run('INSERT INTO card_clicks (card_id, clicks) VALUES (?, 1)', [cardId]);
+    } else {
+      await db.run('UPDATE card_clicks SET clicks = clicks + 1 WHERE card_id = ?', [cardId]);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('记录点击失败:', err);
+    res.status(500).json({ error: '记录失败' });
+  }
+});
+
+// Get click ranking (requires auth)
+router.get('/clicks/ranking', auth, async (req, res) => {
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+
+  try {
+    const ranking = await db.all(`
+      SELECT c.id, c.title, c.url, c.logo_url, c.custom_logo_path, cc.clicks
+      FROM card_clicks cc
+      JOIN cards c ON cc.card_id = c.id
+      ORDER BY cc.clicks DESC
+      LIMIT ?
+    `, [limit]);
+
+    res.json(ranking || []);
+  } catch (err) {
+    console.error('获取点击排行失败:', err);
+    res.status(500).json({ error: '获取排行失败' });
+  }
+});
+
 // Record visit (public API)
 router.post('/visit', async (req, res) => {
   const today = getToday();
