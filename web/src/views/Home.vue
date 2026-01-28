@@ -1,5 +1,6 @@
 <template>
   <div class="home-container">
+    <StarBackground />
     <Toast :message="toast.message" :type="toast.type" v-model:show="toast.show" />
 
     <div class="menu-bar-fixed">
@@ -136,7 +137,7 @@
             后台管理
           </router-link>
         </div>
-        <p class="copyright">Copyright © 2025 Nav8 | <a href="https://github.com/truelife0958/nav8" target="_blank" class="footer-link">Powered by truelife0958</a></p>
+        <p class="copyright">Copyright © {{ currentYear }} Nav8 | <a href="https://github.com/truelife0958/nav8" target="_blank" class="footer-link">Powered by truelife0958</a></p>
       </div>
     </footer>
 
@@ -188,6 +189,7 @@ import { getMenus, getCards, getAds, getFriends, searchCards, recordVisit, getEr
 import MenuBar from '../components/MenuBar.vue';
 import CardGrid from '../components/CardGrid.vue';
 import Toast from '../components/Toast.vue';
+import StarBackground from '../components/StarBackground.vue';
 
 const menus = ref([]);
 const activeMenu = ref(null);
@@ -221,6 +223,9 @@ const cardKey = computed(() => {
 
 const toast = ref({ show: false, message: '', type: 'info' });
 const brokenFriendLogoIds = ref(new Set());
+
+// 动态获取当前年份
+const currentYear = new Date().getFullYear();
 
 function showToast(message, type = 'info') {
   toast.value = { show: true, message, type };
@@ -505,21 +510,7 @@ async function loadCards() {
   }
 }
 
-// 后台静默刷新缓存（暂时不用，预加载已覆盖）
-async function refreshCache(cacheKey) {
-  try {
-    const [menuId, subId] = cacheKey.split('-');
-    const subMenuId = subId === 'main' ? null : parseInt(subId);
-    const res = await getCards(parseInt(menuId), subMenuId);
-    cardsCache.value.set(cacheKey, res.data);
-    // 如果还是当前显示的，更新数据
-    if (getCacheKey(activeMenu.value?.id, activeSubMenu.value?.id) === cacheKey) {
-      cards.value = res.data;
-    }
-  } catch (e) {
-    // 静默失败，不影响用户体验
-  }
-}
+
 
 async function handleSearch() {
   if (!searchQuery.value.trim()) {

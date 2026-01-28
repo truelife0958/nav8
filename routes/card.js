@@ -18,13 +18,13 @@ async function checkUrl(url, timeout = 10000) {
   if (headResult.ok) {
     return headResult;
   }
-  
+
   // HEAD 请求失败时尝试 GET 请求（某些服务器不支持 HEAD）
   // 但如果是超时错误，直接返回，不再尝试 GET
   if (headResult.statusText === '请求超时') {
     return headResult;
   }
-  
+
   return await tryFetch(url, 'GET', timeout);
 }
 
@@ -32,7 +32,7 @@ async function checkUrl(url, timeout = 10000) {
 async function tryFetch(url, method, timeout) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     const response = await fetch(url, {
       method,
@@ -42,7 +42,7 @@ async function tryFetch(url, method, timeout) {
       },
       redirect: 'follow'
     });
-    
+
     clearTimeout(timeoutId);
     return {
       ok: response.ok,
@@ -83,14 +83,14 @@ router.get('/search/query', async (req, res) => {
 router.get('/:menuId', async (req, res) => {
   const menuId = req.params.menuId;
   const { subMenuId } = req.query;
-  
+
   // 验证menuId
   if (!isPositiveInteger(menuId)) {
     return res.status(400).json({ error: '无效的菜单ID' });
   }
-  
+
   let query, params;
-  
+
   if (subMenuId) {
     if (!isPositiveInteger(subMenuId)) {
       return res.status(400).json({ error: '无效的子菜单ID' });
@@ -101,7 +101,7 @@ router.get('/:menuId', async (req, res) => {
     query = 'SELECT * FROM cards WHERE menu_id = ? AND sub_menu_id IS NULL ORDER BY "order"';
     params = [Number(menuId)];
   }
-  
+
   try {
     const rows = await db.all(query, params);
     res.json(processCardsWithDisplayLogo(rows));
@@ -117,9 +117,9 @@ router.post('/', auth, async (req, res) => {
   if (!validation.valid) {
     return res.status(400).json({ error: validation.error });
   }
-  
+
   const { menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, desc, order } = validation.data;
-  
+
   try {
     const result = await db.run(
       'INSERT INTO cards (menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, "desc", "order") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -142,20 +142,20 @@ router.put('/:id', auth, async (req, res) => {
   if (!isPositiveInteger(cardId)) {
     return res.status(400).json({ error: '无效的卡片ID' });
   }
-  
+
   const validation = validateCard(req.body);
   if (!validation.valid) {
     return res.status(400).json({ error: validation.error });
   }
-  
+
   const { menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, desc, order } = validation.data;
-  
+
   try {
     const result = await db.run(
       'UPDATE cards SET menu_id=?, sub_menu_id=?, title=?, url=?, logo_url=?, custom_logo_path=?, "desc"=?, "order"=? WHERE id=?',
       [menu_id, sub_menu_id, title, url, logo_url, custom_logo_path, desc, order, Number(cardId)]
     );
-    
+
     if (result.changes === 0) {
       return res.status(404).json({ error: '卡片不存在' });
     }
@@ -176,7 +176,7 @@ router.delete('/:id', auth, async (req, res) => {
   if (!isPositiveInteger(cardId)) {
     return res.status(400).json({ error: '无效的卡片ID' });
   }
-  
+
   try {
     const result = await db.run('DELETE FROM cards WHERE id=?', [Number(cardId)]);
     res.json({ deleted: result.changes });
@@ -192,7 +192,7 @@ router.post('/batch/delete', auth, async (req, res) => {
   if (!validation.valid) {
     return res.status(400).json({ error: validation.error });
   }
-  
+
   const placeholders = validation.ids.map(() => '?').join(',');
   try {
     const result = await db.run(`DELETE FROM cards WHERE id IN (${placeholders})`, validation.ids);
@@ -206,19 +206,19 @@ router.post('/batch/delete', auth, async (req, res) => {
 // 批量移动卡片
 router.post('/batch/move', auth, async (req, res) => {
   const { ids, menu_id, sub_menu_id } = req.body;
-  
+
   const idsValidation = validateIdArray(ids, '卡片');
   if (!idsValidation.valid) {
     return res.status(400).json({ error: idsValidation.error });
   }
-  
+
   if (!isPositiveInteger(menu_id)) {
     return res.status(400).json({ error: '请选择有效的目标菜单' });
   }
-  
+
   const targetSubMenuId = sub_menu_id && isPositiveInteger(sub_menu_id) ? Number(sub_menu_id) : null;
   const placeholders = idsValidation.ids.map(() => '?').join(',');
-  
+
   try {
     const result = await db.run(
       `UPDATE cards SET menu_id = ?, sub_menu_id = ? WHERE id IN (${placeholders})`,
@@ -238,24 +238,24 @@ router.post('/batch/move', auth, async (req, res) => {
 // 检测死链 - 批量检测卡片链接是否有效
 router.post('/batch/check-links', auth, async (req, res) => {
   const { ids } = req.body;
-  
+
   const idsValidation = validateIdArray(ids, '卡片');
   if (!idsValidation.valid) {
     return res.status(400).json({ error: idsValidation.error });
   }
-  
+
   const placeholders = idsValidation.ids.map(() => '?').join(',');
-  
+
   try {
     const cards = await db.all(`SELECT id, url, title FROM cards WHERE id IN (${placeholders})`, idsValidation.ids);
-    
+
     if (!cards || cards.length === 0) {
       return res.json({ results: [], deadLinks: [] });
     }
-    
+
     const results = [];
     const deadLinks = [];
-    
+
     // 并发检测，但限制并发数
     const concurrency = 5;
     for (let i = 0; i < cards.length; i += concurrency) {
@@ -273,7 +273,7 @@ router.post('/batch/check-links', auth, async (req, res) => {
           };
         })
       );
-      
+
       for (const r of batchResults) {
         results.push(r);
         if (!r.ok) {
@@ -281,32 +281,35 @@ router.post('/batch/check-links', auth, async (req, res) => {
         }
       }
     }
-    
+
     res.json({ results, deadLinks });
-    } catch (err) {
-      console.error('获取卡片失败:', err);
-      return res.status(500).json({ error: '获取卡片失败' });
-    }
-  });
-  
-  // 批量更新卡片排序
-  router.post('/batch/reorder', auth, async (req, res) => {
-    const { orders } = req.body;
-    if (!Array.isArray(orders) || orders.length === 0) {
-      return res.status(400).json({ error: '请提供排序数据' });
-    }
-    
-    try {
+  } catch (err) {
+    console.error('获取卡片失败:', err);
+    return res.status(500).json({ error: '获取卡片失败' });
+  }
+});
+
+// 批量更新卡片排序
+router.post('/batch/reorder', auth, async (req, res) => {
+  const { orders } = req.body;
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return res.status(400).json({ error: '请提供排序数据' });
+  }
+
+  try {
+    // 使用事务确保批量排序的原子性
+    await db.transaction(async (txDb) => {
       for (const item of orders) {
         if (isPositiveInteger(item.id) && typeof item.order === 'number') {
-          await db.run('UPDATE cards SET "order" = ? WHERE id = ?', [item.order, Number(item.id)]);
+          await txDb.run('UPDATE cards SET "order" = ? WHERE id = ?', [item.order, Number(item.id)]);
         }
       }
-      res.json({ success: true, updated: orders.length });
-    } catch (err) {
-      console.error('更新排序失败:', err);
-      return res.status(500).json({ error: '更新排序失败' });
-    }
-  });
-  
-  module.exports = router;
+    });
+    res.json({ success: true, updated: orders.length });
+  } catch (err) {
+    console.error('更新排序失败:', err);
+    return res.status(500).json({ error: '更新排序失败' });
+  }
+});
+
+module.exports = router;

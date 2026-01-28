@@ -3,16 +3,25 @@ const db = require('../db');
 const auth = require('./authMiddleware');
 const router = express.Router();
 
-// Get today's date YYYY-MM-DD
+// Get today's date YYYY-MM-DD (上海时区)
 function getToday() {
-  return new Date().toISOString().split('T')[0];
+  const date = new Date();
+  const shanghaiTime = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+  const year = shanghaiTime.getFullYear();
+  const month = String(shanghaiTime.getMonth() + 1).padStart(2, '0');
+  const day = String(shanghaiTime.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
-// Get date N days ago YYYY-MM-DD
+// Get date N days ago YYYY-MM-DD (上海时区)
 function getDateDaysAgo(days) {
   const date = new Date();
   date.setDate(date.getDate() - days);
-  return date.toISOString().split('T')[0];
+  const shanghaiTime = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+  const year = shanghaiTime.getFullYear();
+  const month = String(shanghaiTime.getMonth() + 1).padStart(2, '0');
+  const day = String(shanghaiTime.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 // Record card click (public API)
@@ -104,23 +113,23 @@ router.post('/visit', async (req, res) => {
 router.get('/summary', auth, async (req, res) => {
   try {
     const today = getToday();
-    
+
     // 今日数据
     const todayStats = await db.get('SELECT pv, uv FROM visits WHERE date = ?', [today]) || { pv: 0, uv: 0 };
-    
+
     // 总计数据
     const totalStats = await db.get('SELECT SUM(pv) as totalPv, SUM(uv) as totalUv FROM visits') || { totalPv: 0, totalUv: 0 };
-    
+
     // 最近7天数据 (用JS算日期，兼容SQLite和PostgreSQL)
     const weekAgo = getDateDaysAgo(7);
     const weekData = await db.all(
       `SELECT date, pv, uv FROM visits WHERE date >= ? ORDER BY date DESC`,
       [weekAgo]
     ) || [];
-    
+
     // 卡片总数
     const cardCount = await db.get('SELECT COUNT(*) as count FROM cards') || { count: 0 };
-    
+
     res.json({
       today: { pv: todayStats.pv || 0, uv: todayStats.uv || 0 },
       total: { pv: totalStats.totalPv || 0, uv: totalStats.totalUv || 0 },

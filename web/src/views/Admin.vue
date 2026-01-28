@@ -89,7 +89,7 @@
         <BackupManage v-if="page==='backup'" />
       </div>
       <footer class="admin-footer">
-        <p class="admin-copyright">Copyright © 2025 Nav8 | <a href="https://github.com/truelife0958/nav8" target="_blank" class="footer-link">Powered by truelife0958</a></p>
+        <p class="admin-copyright">Copyright © {{ currentYear }} Nav8 | <a href="https://github.com/truelife0958/nav8" target="_blank" class="footer-link">Powered by truelife0958</a></p>
       </footer>
     </main>
   </div>
@@ -116,6 +116,9 @@ const loading = ref(false);
 const loginError = ref('');
 const showPassword = ref(false);
 const siderOpen = ref(false);
+
+// 动态获取当前年份
+const currentYear = new Date().getFullYear();
 
 const pageTitle = computed(() => {
   switch (page.value) {

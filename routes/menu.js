@@ -132,14 +132,17 @@ router.delete('/:id', auth, async (req, res) => {
   const id = Number(menuId);
 
   try {
-    await db.run('DELETE FROM cards WHERE menu_id = ?', [id]);
-    await db.run(
-      'DELETE FROM cards WHERE sub_menu_id IN (SELECT id FROM sub_menus WHERE parent_id = ?)',
-      [id]
-    );
-    await db.run('DELETE FROM sub_menus WHERE parent_id = ?', [id]);
+    // 使用事务确保删除操作的原子性
+    const result = await db.transaction(async (txDb) => {
+      await txDb.run('DELETE FROM cards WHERE menu_id = ?', [id]);
+      await txDb.run(
+        'DELETE FROM cards WHERE sub_menu_id IN (SELECT id FROM sub_menus WHERE parent_id = ?)',
+        [id]
+      );
+      await txDb.run('DELETE FROM sub_menus WHERE parent_id = ?', [id]);
+      return await txDb.run('DELETE FROM menus WHERE id = ?', [id]);
+    });
 
-    const result = await db.run('DELETE FROM menus WHERE id = ?', [id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '菜单不存在' });
     }
@@ -237,22 +240,25 @@ router.delete('/submenus/:id', auth, async (req, res) => {
 // 批量更新菜单排序
 router.post('/batch/reorder', auth, async (req, res) => {
   const { orders } = req.body;
-  
+
   if (!Array.isArray(orders) || orders.length === 0) {
     return res.status(400).json({ error: '无效的排序数据' });
   }
-  
+
   // 验证每个排序项
   for (const item of orders) {
     if (!isPositiveInteger(item.id) || !isNonNegativeInteger(item.order)) {
       return res.status(400).json({ error: '无效的排序数据格式' });
     }
   }
-  
+
   try {
-    for (const item of orders) {
-      await db.run('UPDATE menus SET "order" = ? WHERE id = ?', [Number(item.order), Number(item.id)]);
-    }
+    // 使用事务确保批量排序的原子性
+    await db.transaction(async (txDb) => {
+      for (const item of orders) {
+        await txDb.run('UPDATE menus SET "order" = ? WHERE id = ?', [Number(item.order), Number(item.id)]);
+      }
+    });
     return res.json({ updated: orders.length });
   } catch (err) {
     console.error('批量更新菜单排序失败:', err);
@@ -263,22 +269,25 @@ router.post('/batch/reorder', auth, async (req, res) => {
 // 批量更新子菜单排序
 router.post('/submenus/batch/reorder', auth, async (req, res) => {
   const { orders } = req.body;
-  
+
   if (!Array.isArray(orders) || orders.length === 0) {
     return res.status(400).json({ error: '无效的排序数据' });
   }
-  
+
   // 验证每个排序项
   for (const item of orders) {
     if (!isPositiveInteger(item.id) || !isNonNegativeInteger(item.order)) {
       return res.status(400).json({ error: '无效的排序数据格式' });
     }
   }
-  
+
   try {
-    for (const item of orders) {
-      await db.run('UPDATE sub_menus SET "order" = ? WHERE id = ?', [Number(item.order), Number(item.id)]);
-    }
+    // 使用事务确保批量排序的原子性
+    await db.transaction(async (txDb) => {
+      for (const item of orders) {
+        await txDb.run('UPDATE sub_menus SET "order" = ? WHERE id = ?', [Number(item.order), Number(item.id)]);
+      }
+    });
     return res.json({ updated: orders.length });
   } catch (err) {
     console.error('批量更新子菜单排序失败:', err);

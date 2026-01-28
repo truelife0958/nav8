@@ -17,6 +17,7 @@ const userRoutes = require('./routes/user');
 const importRoutes = require('./routes/import');
 const backupRoutes = require('./routes/backup');
 const statsRoutes = require('./routes/stats');
+const monitorRoutes = require('./routes/monitor');
 
 const app = express();
 
@@ -122,6 +123,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api', monitorRoutes);
 
 // SPA路由处理 - 所有非API和非静态文件请求返回index.html
 app.get('*', (req, res, next) => {
@@ -140,12 +142,12 @@ app.use((req, res, next) => {
 // 全局错误处理中间件
 app.use((err, req, res, next) => {
   console.error('服务器错误:', err);
-  
+
   // Multer 错误处理
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: '文件大小超过限制' });
   }
-  
+
   if (err.type === 'entity.too.large') {
     return res.status(413).json({ error: '请求数据过大' });
   }
