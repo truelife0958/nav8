@@ -1,5 +1,6 @@
 <template>
   <div class="ad-manage">
+    <h1 style="color: red; font-size: 24px; text-align: center; padding: 20px;">广告管理页面</h1>
     <Toast :message="toast.message" :type="toast.type" v-model:show="toast.show" />
 
     <!-- 添加广告表单 -->
