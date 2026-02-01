@@ -112,10 +112,10 @@ export const uploadLogo = (file) => {
 };
 
 // 广告API
-export const getAds = () => api.get('/ads');
-export const addAd = (data) => api.post('/ads', data);
-export const updateAd = (id, data) => api.put(`/ads/${id}`, data);
-export const deleteAd = (id) => api.delete(`/ads/${id}`);
+export const getAds = () => api.get('/banners');
+export const addAd = (data) => api.post('/banners', data);
+export const updateAd = (id, data) => api.put(`/banners/${id}`, data);
+export const deleteAd = (id) => api.delete(`/banners/${id}`);
 
 // 友链API
 export const getFriends = () => api.get('/friends');

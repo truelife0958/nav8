@@ -118,7 +118,7 @@ app.use('/api/menus', menuRoutes);
 app.use('/api/cards', cardRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api', authRoutes);
-app.use('/api/ads', adRoutes);
+app.use('/api/banners', adRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/import', importRoutes);
