@@ -253,20 +253,23 @@ async function deleteAd(id) {
   gap: 16px;
   justify-content: center;
   align-items: center;
+  flex-wrap: wrap;
   background: linear-gradient(135deg,#667eea,#764ba2);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  padding: 24px 32px 16px 32px;
-  min-width: 600px;
+  padding: 24px 32px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .select-input {
   min-width: 120px;
   height: 38px;
 }
 .ad-add-row input[type="text"], .ad-add-row input.input {
-  width: 18rem !important;
-  min-width: 200px;
+  width: 200px;
+  min-width: 150px;
   max-width: 100%;
+  flex: 1;
 }
 @media (max-width: 768px) {
   .admin-content{
