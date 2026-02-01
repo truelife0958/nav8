@@ -360,8 +360,8 @@ async function checkDeadLinksHandler() {
         if (res.data && res.data.deadLinks && res.data.deadLinks.length > 0) {
           addToIdSet(deadLinkIds, res.data.deadLinks);
         }
-      } catch (err) {
-        console.error('批次检测失败:', err);
+      } catch {
+        // 批次检测失败时静默处理，继续检测其他批次
       }
     }
     

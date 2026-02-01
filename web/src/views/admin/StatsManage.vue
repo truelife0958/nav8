@@ -93,8 +93,8 @@ onMounted(async () => {
     ]);
     stats.value = statsRes.data;
     clickRanking.value = rankingRes.data || [];
-  } catch (e) {
-    console.error('获取统计失败:', e);
+  } catch {
+    // 静默处理错误
   }
 });
 

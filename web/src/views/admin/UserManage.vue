@@ -48,7 +48,6 @@ onMounted(async () => {
     const response = await getUserProfile();
     userInfo.value = response.data;
   } catch (error) {
-    console.error('获取用户信息失败:', error);
     showMessage(getErrorMessage(error), 'error');
   }
 });

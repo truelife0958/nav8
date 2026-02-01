@@ -1,7 +1,6 @@
 <template>
   <div class="friend-manage">
     <Toast :message="toast.message" :type="toast.type" v-model:show="toast.show" />
-    <div class="friend-header"></div>
     <div class="friend-add">
       <input v-model="newTitle" placeholder="网站名" class="input" />
       <input v-model="newUrl" placeholder="网站链接" class="input" />
@@ -105,9 +104,6 @@ async function deleteFriend(id) {
   margin: 32px 0 32px 0;
   letter-spacing: 2px;
   color: #222;
-}
-.friend-header {
-  height: 32px;
 }
 .friend-add {
   display: flex;
