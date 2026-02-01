@@ -150,7 +150,6 @@ async function fetchLastLoginInfo() {
       lastLoginIp.value = res.data.last_login_ip || '';
     }
   } catch (error) {
-    console.error('获取用户信息失败:', error);
     // 如果 token 失效，自动登出
     if (error.response?.status === 401) {
       logout();

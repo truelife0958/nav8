@@ -223,8 +223,11 @@ router.delete('/submenus/:id', auth, async (req, res) => {
   const id = Number(subMenuId);
 
   try {
-    await db.run('DELETE FROM cards WHERE sub_menu_id = ?', [id]);
-    const result = await db.run('DELETE FROM sub_menus WHERE id = ?', [id]);
+    // 使用事务确保删除操作的原子性
+    const result = await db.transaction(async (txDb) => {
+      await txDb.run('DELETE FROM cards WHERE sub_menu_id = ?', [id]);
+      return await txDb.run('DELETE FROM sub_menus WHERE id = ?', [id]);
+    });
 
     if (result.changes === 0) {
       return res.status(404).json({ error: '子菜单不存在' });

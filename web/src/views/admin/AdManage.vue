@@ -72,7 +72,6 @@ async function loadAds() {
     leftAds.value = ads.filter(ad => ad.position === 'left');
     rightAds.value = ads.filter(ad => ad.position === 'right');
   } catch (error) {
-    console.error('加载广告失败:', error);
     showToast('加载广告失败: ' + getErrorMessage(error), 'error');
     leftAds.value = [];
     rightAds.value = [];

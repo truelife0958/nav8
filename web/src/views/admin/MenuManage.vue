@@ -158,17 +158,21 @@ function showToast(message, type = 'info') {
 onMounted(loadMenus);
 
 async function loadMenus() {
-  const res = await getMenus();
-  // 保留现有的展开状态
-  const existingStatus = {};
-  menus.value.forEach(m => {
-    existingStatus[m.id] = m.showSubMenu;
-  });
+  try {
+    const res = await getMenus();
+    // 保留现有的展开状态
+    const existingStatus = {};
+    menus.value.forEach(m => {
+      existingStatus[m.id] = m.showSubMenu;
+    });
 
-  menus.value = res.data.map(menu => ({
-    ...menu,
-    showSubMenu: existingStatus[menu.id] || false
-  }));
+    menus.value = res.data.map(menu => ({
+      ...menu,
+      showSubMenu: existingStatus[menu.id] || false
+    }));
+  } catch (error) {
+    showToast('加载菜单失败: ' + getErrorMessage(error), 'error');
+  }
 }
 
 async function addMenu() {

@@ -43,8 +43,12 @@ function showToast(message, type = 'info') {
 onMounted(loadFriends);
 
 async function loadFriends() {
-  const res = await getFriends();
-  friends.value = res.data;
+  try {
+    const res = await getFriends();
+    friends.value = res.data;
+  } catch (error) {
+    showToast('加载友链失败: ' + getErrorMessage(error), 'error');
+  }
 }
 
 async function addFriend() {

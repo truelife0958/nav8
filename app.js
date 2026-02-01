@@ -76,12 +76,13 @@ const corsOptions = {
   credentials: true // Allow cookies to be sent
 };
 
-// In development, allow all origins for convenience
+// In development, allow specific localhost origins for convenience
+// Note: Using '*' with credentials:true is invalid per CORS spec
 if (process.env.NODE_ENV !== 'production' && !corsOrigin) {
-  corsOptions.origin = '*';
-  console.log('⚠️  CORS: Development mode - allowing all origins');
+  corsOptions.origin = ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173'];
+  console.log('CORS: Development mode - allowing localhost origins');
 } else if (!corsOrigin) {
-  console.log('ℹ️  CORS: No CORS_ORIGIN set - using same-origin policy');
+  console.log('CORS: No CORS_ORIGIN set - using same-origin policy');
 }
 
 app.use(cors(corsOptions));
@@ -173,4 +174,10 @@ async function start() {
   }
 }
 
-start();
+// 仅在直接运行时启动服务器，支持测试环境导入
+if (require.main === module) {
+  start();
+}
+
+// 导出 app 供测试使用
+module.exports = { app };

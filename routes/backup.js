@@ -35,6 +35,27 @@ router.post('/import', auth, express.json({ limit: '50mb' }), async (req, res) =
   const { data, overwrite } = req.body;
   if (!data) return res.status(400).json({ error: '无效的备份数据' });
 
+  // 输入验证函数
+  function validateMenu(menu) {
+    return menu && typeof menu.name === 'string' && menu.name.trim().length > 0;
+  }
+
+  function validateSubMenu(sub) {
+    return sub && typeof sub.name === 'string' && sub.name.trim().length > 0;
+  }
+
+  function validateCard(card) {
+    return card && typeof card.title === 'string' && card.title.trim().length > 0;
+  }
+
+  function validateAd(ad) {
+    return ad && typeof ad.position === 'string' && typeof ad.img === 'string';
+  }
+
+  function validateFriend(friend) {
+    return friend && typeof friend.title === 'string' && typeof friend.url === 'string';
+  }
+
   try {
     const imported = await db.transaction(async (txDb) => {
       let counts = { menus: 0, sub_menus: 0, cards: 0, ads: 0, friends: 0 };
@@ -53,20 +74,29 @@ router.post('/import', auth, express.json({ limit: '50mb' }), async (req, res) =
       const subMenuIdMap = new Map();
 
       for (const menu of (data.menus || [])) {
-        const result = await txDb.run('INSERT INTO menus (name, "order") VALUES (?, ?)', [menu.name, menu.order || 0]);
+        if (!validateMenu(menu)) {
+          throw new Error('无效的菜单数据: 菜单名称不能为空');
+        }
+        const result = await txDb.run('INSERT INTO menus (name, "order") VALUES (?, ?)', [menu.name.trim(), menu.order || 0]);
         menuIdMap.set(menu.id, result.lastID);
         counts.menus++;
       }
 
       for (const sub of (data.sub_menus || [])) {
+        if (!validateSubMenu(sub)) {
+          throw new Error('无效的子菜单数据: 子菜单名称不能为空');
+        }
         const newParentId = menuIdMap.get(sub.parent_id) || sub.parent_id;
         const result = await txDb.run('INSERT INTO sub_menus (parent_id, name, "order") VALUES (?, ?, ?)',
-          [newParentId, sub.name, sub.order || 0]);
+          [newParentId, sub.name.trim(), sub.order || 0]);
         subMenuIdMap.set(sub.id, result.lastID);
         counts.sub_menus++;
       }
 
       for (const card of (data.cards || [])) {
+        if (!validateCard(card)) {
+          throw new Error('无效的卡片数据: 卡片标题不能为空');
+        }
         const newMenuId = menuIdMap.get(card.menu_id) || card.menu_id;
         const newSubMenuId = card.sub_menu_id ? (subMenuIdMap.get(card.sub_menu_id) || card.sub_menu_id) : null;
 
@@ -76,18 +106,24 @@ router.post('/import', auth, express.json({ limit: '50mb' }), async (req, res) =
 
         await txDb.run(
           insertCardSql,
-          [newMenuId, newSubMenuId, card.title, card.url, card.logo_url || '', card.custom_logo_path || '', card.desc || '', card.order || 0]
+          [newMenuId, newSubMenuId, card.title.trim(), card.url || '', card.logo_url || '', card.custom_logo_path || '', card.desc || '', card.order || 0]
         );
         counts.cards++;
       }
 
       for (const ad of (data.ads || [])) {
-        await txDb.run('INSERT INTO ads (position, img, url) VALUES (?, ?, ?)', [ad.position, ad.img, ad.url]);
+        if (!validateAd(ad)) {
+          throw new Error('无效的广告数据: 缺少必要字段');
+        }
+        await txDb.run('INSERT INTO ads (position, img, url) VALUES (?, ?, ?)', [ad.position, ad.img, ad.url || '']);
         counts.ads++;
       }
 
       for (const friend of (data.friends || [])) {
-        await txDb.run('INSERT INTO friends (title, url, logo) VALUES (?, ?, ?)', [friend.title, friend.url, friend.logo || '']);
+        if (!validateFriend(friend)) {
+          throw new Error('无效的友链数据: 缺少必要字段');
+        }
+        await txDb.run('INSERT INTO friends (title, url, logo) VALUES (?, ?, ?)', [friend.title.trim(), friend.url, friend.logo || '']);
         counts.friends++;
       }
 

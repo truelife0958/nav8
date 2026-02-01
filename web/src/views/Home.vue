@@ -62,13 +62,13 @@
 
     <!-- 左侧广告条 -->
     <div v-if="leftAds.length" class="ad-space-fixed left-ad-fixed">
-      <a v-for="ad in leftAds" :key="ad.id" :href="ad.url" target="_blank">
+      <a v-for="ad in leftAds" :key="ad.id" :href="sanitizeUrl(ad.url)" target="_blank" rel="noopener noreferrer">
         <img :src="ad.img" alt="广告" />
       </a>
     </div>
     <!-- 右侧广告条 -->
     <div v-if="rightAds.length" class="ad-space-fixed right-ad-fixed">
-      <a v-for="ad in rightAds" :key="ad.id" :href="ad.url" target="_blank">
+      <a v-for="ad in rightAds" :key="ad.id" :href="sanitizeUrl(ad.url)" target="_blank" rel="noopener noreferrer">
         <img :src="ad.img" alt="广告" />
       </a>
     </div>
@@ -157,8 +157,9 @@
             <a
               v-for="friend in friendLinks"
               :key="friend.id"
-              :href="friend.url"
+              :href="sanitizeUrl(friend.url)"
               target="_blank"
+              rel="noopener noreferrer"
               class="friend-link-card"
             >
               <div class="friend-link-logo">
@@ -184,7 +185,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { getMenus, getCards, getAds, getFriends, searchCards, recordVisit, getErrorMessage } from '../api';
 import MenuBar from '../components/MenuBar.vue';
 import CardGrid from '../components/CardGrid.vue';
@@ -227,6 +228,9 @@ const brokenFriendLogoIds = ref(new Set());
 // 动态获取当前年份
 const currentYear = new Date().getFullYear();
 
+// 定时器引用，用于清理
+let hideHistoryTimer = null;
+
 function showToast(message, type = 'info') {
   toast.value = { show: true, message, type };
 }
@@ -235,6 +239,20 @@ function markFriendLogoBroken(friendId) {
   const next = new Set(brokenFriendLogoIds.value);
   next.add(friendId);
   brokenFriendLogoIds.value = next;
+}
+
+// URL验证函数，防止XSS攻击
+function sanitizeUrl(url) {
+  if (!url) return '#';
+  try {
+    const parsed = new URL(url);
+    if (['http:', 'https:'].includes(parsed.protocol)) {
+      return url;
+    }
+  } catch {
+    // 无效URL
+  }
+  return '#';
 }
 
 // 聚合搜索配置
@@ -323,8 +341,17 @@ function clearHistory() {
 }
 
 function hideHistoryDelayed() {
-  setTimeout(() => { showHistory.value = false; }, 200);
+  if (hideHistoryTimer) clearTimeout(hideHistoryTimer);
+  hideHistoryTimer = setTimeout(() => { showHistory.value = false; }, 200);
 }
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  if (hideHistoryTimer) {
+    clearTimeout(hideHistoryTimer);
+    hideHistoryTimer = null;
+  }
+});
 
 function exitSearch() {
   isSearching.value = false;
@@ -416,7 +443,6 @@ onMounted(async () => {
       await preloadAllMenuCards();
     }
   } catch (error) {
-    console.error('加载数据失败:', error);
     showToast('加载数据失败：' + getErrorMessage(error), 'error');
   } finally {
     initialLoading.value = false;
@@ -505,7 +531,6 @@ async function loadCards() {
     cards.value = res.data;
     cardsCache.value.set(cacheKey, res.data);
   } catch (error) {
-    console.error('加载卡片失败:', error);
     cards.value = [];
   }
 }
@@ -530,7 +555,6 @@ async function handleSearch() {
         showToast('未找到相关内容', 'warning');
       }
     } catch (error) {
-      console.error('搜索出错:', error);
       showToast('搜索出错：' + getErrorMessage(error), 'error');
     }
   } else {

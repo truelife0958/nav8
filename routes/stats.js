@@ -24,23 +24,20 @@ function getDateDaysAgo(days) {
   return `${year}-${month}-${day}`;
 }
 
-// Record card click (public API)
+// Record card click (public API) - 使用UPSERT避免竞态条件
 router.post('/click/:cardId', async (req, res) => {
   const cardId = parseInt(req.params.cardId);
-  if (!cardId || isNaN(cardId)) {
+  if (!cardId || isNaN(cardId) || cardId <= 0) {
     return res.status(400).json({ error: '无效的卡片ID' });
   }
 
   try {
-    // Check if record exists
-    const record = await db.get('SELECT * FROM card_clicks WHERE card_id = ?', [cardId]);
+    // 使用UPSERT避免竞态条件
+    const sql = db.isPostgres
+      ? 'INSERT INTO card_clicks (card_id, clicks) VALUES (?, 1) ON CONFLICT (card_id) DO UPDATE SET clicks = card_clicks.clicks + 1'
+      : 'INSERT INTO card_clicks (card_id, clicks) VALUES (?, 1) ON CONFLICT(card_id) DO UPDATE SET clicks = clicks + 1';
 
-    if (!record) {
-      await db.run('INSERT INTO card_clicks (card_id, clicks) VALUES (?, 1)', [cardId]);
-    } else {
-      await db.run('UPDATE card_clicks SET clicks = clicks + 1 WHERE card_id = ?', [cardId]);
-    }
-
+    await db.run(sql, [cardId]);
     res.json({ success: true });
   } catch (err) {
     console.error('记录点击失败:', err);
@@ -68,27 +65,24 @@ router.get('/clicks/ranking', auth, async (req, res) => {
   }
 });
 
-// Record visit (public API)
+// Record visit (public API) - 使用UPSERT避免竞态条件
 router.post('/visit', async (req, res) => {
   const today = getToday();
 
   try {
-    // Check if today's record exists
-    let record = await db.get('SELECT * FROM visits WHERE date = ?', [today]);
-
     // Check if this is a new visitor using cookie
-    // req.cookies is now available thanks to cookie-parser middleware
     const lastVisitDate = req.cookies?.nav8_visited;
     const isNewVisitor = lastVisitDate !== today;
+    const uvIncrement = isNewVisitor ? 1 : 0;
 
-    if (!record) {
-      await db.run('INSERT INTO visits (date, pv, uv) VALUES (?, 1, 1)', [today]);
-    } else {
-      await db.run(
-        'UPDATE visits SET pv = pv + 1, uv = uv + ? WHERE date = ?',
-        [isNewVisitor ? 1 : 0, today]
-      );
-    }
+    // 使用UPSERT避免竞态条件
+    const sql = db.isPostgres
+      ? `INSERT INTO visits (date, pv, uv) VALUES (?, 1, 1)
+         ON CONFLICT (date) DO UPDATE SET pv = visits.pv + 1, uv = visits.uv + ?`
+      : `INSERT INTO visits (date, pv, uv) VALUES (?, 1, 1)
+         ON CONFLICT(date) DO UPDATE SET pv = pv + 1, uv = uv + ?`;
+
+    await db.run(sql, [today, uvIncrement]);
 
     // Set cookie to track visitor for UV calculation
     // Cookie expires at end of day (midnight)

@@ -27,7 +27,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, onUnmounted } from 'vue';
 
 const props = defineProps({
   message: {
@@ -54,10 +54,18 @@ const emit = defineEmits(['update:show']);
 const visible = ref(false);
 let timer = null;
 
+// 清理定时器函数
+function clearTimer() {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+}
+
 watch(() => props.show, (newVal) => {
   if (newVal) {
     visible.value = true;
-    if (timer) clearTimeout(timer);
+    clearTimer();
     timer = setTimeout(() => {
       visible.value = false;
       emit('update:show', false);
@@ -66,6 +74,11 @@ watch(() => props.show, (newVal) => {
     visible.value = false;
   }
 }, { immediate: true });
+
+// 组件卸载时清理定时器，防止内存泄漏
+onUnmounted(() => {
+  clearTimer();
+});
 </script>
 
 <style scoped>
