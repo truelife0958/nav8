@@ -196,7 +196,9 @@ import {
   getErrorMessage
 } from '../../api';
 import Toast from '../../components/Toast.vue';
+import { useToast } from '../../composables/useToast';
 
+const { toast, showToast } = useToast();
 const menus = ref([]);
 const cards = ref([]);
 const selectedMenuId = ref();
@@ -224,9 +226,6 @@ function addToIdSet(setRef, ids) {
   setRef.value = next;
 }
 
-// Toast提示
-const toast = ref({ show: false, message: '', type: 'info' });
-
 // 导入书签相关
 const showImportModal = ref(false);
 const importMenuId = ref('');
@@ -245,10 +244,6 @@ const importSubMenus = computed(() => {
   const menu = menus.value.find(m => m.id === importMenuId.value);
   return menu?.subMenus || [];
 });
-
-function showToast(message, type = 'info') {
-  toast.value = { show: true, message, type };
-}
 
 const currentSubMenus = computed(() => {
   if (!selectedMenuId.value) return [];

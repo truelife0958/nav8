@@ -168,6 +168,26 @@ async function start() {
       console.error('服务器启动失败:', err);
       process.exit(1);
     });
+
+    // 优雅关闭
+    function gracefulShutdown(signal) {
+      console.log(`\n收到 ${signal} 信号，正在关闭服务器...`);
+      server.close(() => {
+        if (db.close) {
+          db.close();
+        }
+        console.log('服务器已安全关闭');
+        process.exit(0);
+      });
+      // 强制退出兜底
+      setTimeout(() => {
+        console.error('强制退出');
+        process.exit(1);
+      }, 5000);
+    }
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   } catch (err) {
     console.error('数据库初始化失败:', err);
     process.exit(1);

@@ -1,8 +1,11 @@
 <template>
   <div class="user-manage">
+    <Toast :message="toast.message" :type="toast.type" v-model:show="toast.show" />
+
     <div class="user-header">
+      <h2 class="page-title">用户管理</h2>
     </div>
-    
+
     <div class="user-card">
       <div class="password-section">
         <h3 class="section-title">修改密码</h3>
@@ -24,7 +27,6 @@
               {{ loading ? '修改中...' : '修改密码' }}
             </button>
           </div>
-          <p v-if="message" :class="['message', messageType]">{{ message }}</p>
         </div>
       </div>
     </div>
@@ -34,13 +36,14 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { getUserProfile, changePassword, getErrorMessage } from '../../api';
+import Toast from '../../components/Toast.vue';
+import { useToast } from '../../composables/useToast';
 
+const { toast, showToast } = useToast();
 const oldPassword = ref('');
 const newPassword = ref('');
 const confirmPassword = ref('');
 const loading = ref(false);
-const message = ref('');
-const messageType = ref('success');
 const userInfo = ref({});
 
 onMounted(async () => {
@@ -48,102 +51,89 @@ onMounted(async () => {
     const response = await getUserProfile();
     userInfo.value = response.data;
   } catch (error) {
-    showMessage(getErrorMessage(error), 'error');
+    showToast(getErrorMessage(error), 'error');
   }
 });
 
 async function handleChangePassword() {
   if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
-    showMessage('请填写所有密码字段', 'error');
+    showToast('请填写所有密码字段', 'error');
     return;
   }
 
   if (newPassword.value !== confirmPassword.value) {
-    showMessage('两次输入的新密码不一致', 'error');
+    showToast('两次输入的新密码不一致', 'error');
     return;
   }
 
   if (newPassword.value.length < 6) {
-    showMessage('新密码长度至少6位', 'error');
+    showToast('新密码长度至少6位', 'error');
     return;
   }
 
   loading.value = true;
-  message.value = '';
 
   try {
     await changePassword(oldPassword.value, newPassword.value);
-    showMessage('密码修改成功', 'success');
+    showToast('密码修改成功，2秒后自动退出登录...', 'success');
     oldPassword.value = '';
     newPassword.value = '';
     confirmPassword.value = '';
+    setTimeout(() => {
+      localStorage.removeItem('token');
+      window.location.reload();
+    }, 2000);
   } catch (error) {
-    showMessage(getErrorMessage(error), 'error');
+    showToast(getErrorMessage(error), 'error');
   } finally {
     loading.value = false;
-  }
-}
-
-function showMessage(text, type) {
-  message.value = text;
-  messageType.value = type;
-  if (text === '密码修改成功' && type === 'success') {
-    setTimeout(() => {
-      message.value = '2秒后自动退出登录,请使用新密码重新登录...';
-      setTimeout(() => {
-        localStorage.removeItem('token');
-        window.location.reload();
-      }, 2000);
-    }, 500);
-  } else {
-    setTimeout(() => {
-      message.value = '';
-    }, 3000);
   }
 }
 </script>
 
 <style scoped>
 .user-manage {
-  max-width: 1400px;
-  width: 90%;
+  max-width: 600px;
+  width: 95%;
   margin: 0 auto;
+}
+
+.user-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+  color: white;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
 }
 
 .page-title {
-  text-align: center;
-  font-size: 1.6rem;
-  font-weight: 500;
-  margin: 32px 0 32px 0;
-  letter-spacing: 2px;
-  color: #222;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
 }
 
 .user-card {
-  width: 50%;
-  margin: 0 auto;
-  background: linear-gradient(135deg,#667eea,#764ba2);
+  background: white;
   border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  padding: 10px 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 32px;
 }
 
 .section-title {
   text-align: center;
-  font-size: 1.5rem;
-  font-weight: 500;
-  color: #222;
-  margin-bottom: 20px;
-  border-bottom: 2px solid #eaf1ff;
-  padding-bottom: 8px;
-}
-
-.password-section {
-  margin-bottom: 40px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 24px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e5e7eb;
 }
 
 .password-form {
-  max-width: 500px;
+  max-width: 400px;
+  margin: 0 auto;
 }
 
 .form-group {
@@ -154,23 +144,26 @@ function showMessage(text, type) {
   display: block;
   margin-bottom: 6px;
   font-weight: 500;
-  color: #222;
+  color: #374151;
+  font-size: 0.9rem;
 }
 
 .input {
   width: 100%;
-  padding: 12px 12px;
+  padding: 12px;
   border-radius: 8px;
-  border: 1px solid #d0d7e2;
+  border: 1px solid #d1d5db;
   background: #fff;
-  color: #222;
+  color: #1f2937;
   font-size: 1rem;
   box-sizing: border-box;
+  transition: all 0.2s;
 }
 
 .input:focus {
-  outline: 2px solid #2566d8;
-  border-color: #2566d8;
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .form-actions {
@@ -179,66 +172,37 @@ function showMessage(text, type) {
 }
 
 .btn {
-  background: #2566d8;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
   border: none;
   border-radius: 8px;
-  padding: 12px 24px;
+  padding: 12px 32px;
   cursor: pointer;
   font-size: 1rem;
   font-weight: 500;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
 .btn:hover:not(:disabled) {
-  background: #174ea6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .btn:disabled {
-  background: #ccc;
+  opacity: 0.6;
   cursor: not-allowed;
-}
-
-.message {
-  margin-top: 16px;
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-.message.success {
-  background: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
-}
-
-.message.error {
-  background: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+  transform: none;
 }
 
 @media (max-width: 768px) {
-  .user-manage {
-    padding: 0 2vw;
-  }
   .user-card {
-    width: 80%;
-    padding: 12px 2vw;
+    padding: 20px;
   }
   .password-form {
     max-width: 100%;
   }
-  .input {
-    width: 100%;
-    min-width: 0;
-    font-size: 14px;
-    padding: 8px 8px;
-  }
   .btn {
     width: 100%;
-    padding: 10px 0;
-    font-size: 14px;
   }
 }
-</style> 
+</style>

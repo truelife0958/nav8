@@ -62,18 +62,14 @@
 import { ref, onMounted } from 'vue';
 import { getAds, addAd as apiAddAd, updateAd as apiUpdateAd, deleteAd as apiDeleteAd, getErrorMessage } from '../../api';
 import Toast from '../../components/Toast.vue';
+import { useToast } from '../../composables/useToast';
 
+const { toast, showToast } = useToast();
 const leftAds = ref([]);
 const rightAds = ref([]);
 const newAdImg = ref('');
 const newAdUrl = ref('');
 const newAdPos = ref('left');
-
-const toast = ref({ show: false, message: '', type: 'info' });
-
-function showToast(message, type = 'info') {
-  toast.value = { show: true, message, type };
-}
 
 onMounted(loadAds);
 

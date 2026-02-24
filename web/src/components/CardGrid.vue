@@ -14,6 +14,7 @@
 <script setup>
 import { ref, watch, nextTick } from 'vue';
 import { recordCardClick } from '../api';
+import { getCardLogo, onLogoError as handleLogoError } from '../utils/logo';
 
 const props = defineProps({ cards: Array });
 
@@ -121,21 +122,11 @@ function getCardStyle(index) {
 }
 
 function getLogo(card) {
-  if (card.custom_logo_path) return '/uploads/' + card.custom_logo_path;
-  if (card.logo_url) return card.logo_url;
-  // 默认 favicon
-  if (!card.url) return '/default-favicon.png';
-  try {
-    const url = new URL(card.url);
-    return url.origin + '/favicon.ico';
-  } catch (e) {
-    console.warn('无法解析URL:', card.url, e);
-    return '/default-favicon.png';
-  }
+  return getCardLogo(card);
 }
 
-function onImgError(e, card) {
-  e.target.src = '/default-favicon.png';
+function onImgError(e) {
+  handleLogoError(e);
 }
 
 function getTooltip(card) {

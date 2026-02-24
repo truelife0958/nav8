@@ -191,6 +191,7 @@ import MenuBar from '../components/MenuBar.vue';
 import CardGrid from '../components/CardGrid.vue';
 import Toast from '../components/Toast.vue';
 import StarBackground from '../components/StarBackground.vue';
+import { useToast } from '../composables/useToast';
 
 const menus = ref([]);
 const activeMenu = ref(null);
@@ -222,7 +223,7 @@ const cardKey = computed(() => {
   return `${activeMenu.value.id}-${activeSubMenu.value?.id || 'main'}`;
 });
 
-const toast = ref({ show: false, message: '', type: 'info' });
+const { toast, showToast } = useToast();
 const brokenFriendLogoIds = ref(new Set());
 
 // 动态获取当前年份
@@ -230,10 +231,6 @@ const currentYear = new Date().getFullYear();
 
 // 定时器引用，用于清理
 let hideHistoryTimer = null;
-
-function showToast(message, type = 'info') {
-  toast.value = { show: true, message, type };
-}
 
 function markFriendLogoBroken(friendId) {
   const next = new Set(brokenFriendLogoIds.value);
@@ -1179,12 +1176,13 @@ async function handleSearch() {
   max-height: 160px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.12);
   background: #fff;
+  border-radius: 8px;
   margin: 0 auto;
 }
 
 @media (max-width: 1200px) {
   .ad-space-fixed {
-     /* display: none; */
+     display: none;
   }
 }
 

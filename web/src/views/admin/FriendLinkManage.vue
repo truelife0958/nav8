@@ -1,21 +1,43 @@
 <template>
   <div class="friend-manage">
     <Toast :message="toast.message" :type="toast.type" v-model:show="toast.show" />
-    <div class="friend-add">
-      <input v-model="newTitle" placeholder="网站名" class="input" />
-      <input v-model="newUrl" placeholder="网站链接" class="input" />
-      <input v-model="newLogo" placeholder="logo链接(可选)" class="input" />
-      <button class="btn" @click="addFriend">添加友链</button>
+
+    <div class="friend-header">
+      <h2 class="page-title">友情链接管理</h2>
+      <div class="friend-add">
+        <input v-model="newTitle" placeholder="网站名" class="input" />
+        <input v-model="newUrl" placeholder="网站链接" class="input" />
+        <input v-model="newLogo" placeholder="logo链接(可选)" class="input" />
+        <button class="btn btn-add" @click="addFriend">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          添加友链
+        </button>
+      </div>
     </div>
+
     <div class="friend-card">
       <table class="friend-table">
-        <thead><tr><th>网站名</th><th>链接</th><th>Logo</th><th>操作</th></tr></thead>
+        <thead>
+          <tr><th>网站名</th><th>链接</th><th>Logo</th><th>操作</th></tr>
+        </thead>
         <tbody>
           <tr v-for="f in friends" :key="f.id">
-            <td><input v-model="f.title" @blur="updateFriend(f)" class="input" /></td>
-            <td><input v-model="f.url" @blur="updateFriend(f)" class="input" /></td>
-            <td><input v-model="f.logo" @blur="updateFriend(f)" class="input" placeholder="logo链接(可选)" /></td>
-            <td><button class="btn btn-danger" @click="deleteFriend(f.id)">删除</button></td>
+            <td><input v-model="f.title" @blur="updateFriend(f)" class="table-input" /></td>
+            <td><input v-model="f.url" @blur="updateFriend(f)" class="table-input" /></td>
+            <td><input v-model="f.logo" @blur="updateFriend(f)" class="table-input" placeholder="logo链接(可选)" /></td>
+            <td class="action-col">
+              <button class="btn btn-danger btn-icon" @click="deleteFriend(f.id)" title="删除">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                  <path d="M10 11v6M14 11v6"/>
+                </svg>
+              </button>
+            </td>
+          </tr>
+          <tr v-if="friends.length === 0">
+            <td colspan="4" class="empty-cell">暂无友链数据</td>
           </tr>
         </tbody>
       </table>
@@ -27,17 +49,13 @@
 import { ref, onMounted } from 'vue';
 import { getFriends, addFriend as apiAddFriend, updateFriend as apiUpdateFriend, deleteFriend as apiDeleteFriend, getErrorMessage } from '../../api';
 import Toast from '../../components/Toast.vue';
+import { useToast } from '../../composables/useToast';
 
+const { toast, showToast } = useToast();
 const friends = ref([]);
 const newTitle = ref('');
 const newUrl = ref('');
 const newLogo = ref('');
-
-const toast = ref({ show: false, message: '', type: 'info' });
-
-function showToast(message, type = 'info') {
-  toast.value = { show: true, message, type };
-}
 
 onMounted(loadFriends);
 
@@ -70,9 +88,10 @@ async function addFriend() {
 async function updateFriend(f) {
   try {
     await apiUpdateFriend(f.id, { title: f.title, url: f.url, logo: f.logo });
-    loadFriends();
+    showToast('更新成功', 'success');
   } catch (error) {
     showToast('更新友链失败: ' + getErrorMessage(error), 'error');
+    loadFriends();
   }
 }
 
@@ -90,147 +109,172 @@ async function deleteFriend(id) {
 
 <style scoped>
 .friend-manage {
-  max-width: 1400px;
-  width: 90%;
+  max-width: 1200px;
+  width: 95%;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-.page-title {
+
+.friend-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+  color: white;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+  width: 94%;
   text-align: center;
-  font-size: 2rem;
-  font-weight: bold;
-  margin: 32px 0 32px 0;
-  letter-spacing: 2px;
-  color: #222;
 }
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 15px 0;
+}
+
 .friend-add {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
   justify-content: center;
   align-items: center;
-  width: 100%;
+  flex-wrap: wrap;
 }
+
+.input {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+  background: #fff;
+  color: #1f2937;
+  font-size: 0.9rem;
+  min-width: 160px;
+  transition: all 0.2s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-add {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+.btn-add:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.btn-danger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 6px;
+}
+
 .friend-card {
   width: 100%;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  padding: 32px 24px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
 }
-.input {
-  width: 15rem;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #d0d7e2;
-  background: #fff;
-  color: #222;
-  margin-right: 8px;
-  height: 25px;
-  font-size: 1rem;
-}
-.input:focus {
-  outline: 2px solid #2566d8;
-}
-.btn {
-  background: #2566d8;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 18px;
-  cursor: pointer;
-  margin-right: 8px;
-  transition: background 0.2s;
-}
-.btn:hover {
-  background: #174ea6;
-}
-.btn-danger {
-  background: #e74c3c;
-  display: inline-block;
-  margin: 0 auto;
-}
-.btn-danger:hover {
-  background: #c0392b;
-}
+
 .friend-table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
-  color: #222;
-  border-radius: 8px;
-  overflow: hidden;
 }
-.friend-table th, .friend-table td {
-  padding: 10px 14px;
-  border: 1px solid #e3e6ef;
-  height: 30px;
+
+.friend-table th,
+.friend-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
 }
+
 .friend-table th {
-  background: #f5f7fa;
-  color: #222;
-  font-weight: bold;
+  background: #f9fafb;
+  font-weight: 600;
+  color: #374151;
 }
-.friend-table td input {
-  width: 97%;
-  background: #f9f9f9;
-  color: #222;
-  border: 1px solid #d0d7e2;
-  border-radius: 4px;
-  padding: 4px 4px;
-  height: 30px;
-  font-size: 1rem;
+
+.table-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #fff;
+  color: #1f2937;
+  box-sizing: border-box;
+  transition: all 0.2s;
 }
-.friend-table th:last-child,
-.friend-table td:last-child {
+
+.table-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.action-col {
   text-align: center;
-  vertical-align: middle;
+  width: 80px;
 }
+
+.empty-cell {
+  text-align: center;
+  color: #9ca3af;
+  padding: 32px !important;
+}
+
 @media (max-width: 768px) {
   .friend-manage {
-    width: 92%;
-    padding: 0 2vw;
+    width: 93%;
   }
+
   .friend-add {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
-    width: 100%;
   }
-  .friend-card {
-    width: 100%;
-    padding: 12px 2vw;
-  }
-  .friend-table {
-    display: block;
-    width: 100%;
-    overflow-x: auto;
-    font-size: 14px;
-  }
-  .friend-table thead, .friend-table tbody, .friend-table tr {
-    display: table;
-    width: 100%;
-    table-layout: fixed;
-  }
-  .friend-table th, .friend-table td {
-    padding: 8px 6px;
-    font-size: 13px;
-  }
+
   .input {
-    width: 95%;
     min-width: 0;
-    margin-right: 0;
-    font-size: 14px;
-    padding: 8px 8px;
-    height: 32px !important;
-  }
-  .btn {
     width: 100%;
-    margin-right: 0;
-    padding: 8px 0;
-    font-size: 14px;
+  }
+
+  .friend-table th,
+  .friend-table td {
+    padding: 8px;
+    font-size: 0.85rem;
   }
 }
-</style> 
+</style>

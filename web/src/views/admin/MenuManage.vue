@@ -136,12 +136,11 @@ import {
   getErrorMessage
 } from '../../api';
 import Toast from '../../components/Toast.vue';
+import { useToast } from '../../composables/useToast';
 
+const { toast, showToast } = useToast();
 const menus = ref([]);
 const newMenuName = ref('');
-
-// Toast提示
-const toast = ref({ show: false, message: '', type: 'info' });
 
 // 主菜单拖拽相关
 const menuDragIndex = ref(null);
@@ -150,10 +149,6 @@ const menuDropIndex = ref(null);
 // 子菜单拖拽相关
 const subMenuDragData = ref(null);
 const subMenuDropData = ref(null);
-
-function showToast(message, type = 'info') {
-  toast.value = { show: true, message, type };
-}
 
 onMounted(loadMenus);
 
@@ -754,7 +749,7 @@ function onSubMenuDragEnd() {
 
 /* 展开子菜单按钮样式 */
 .btn-icon.expand-btn {
-  width: 200px;
+  width: 36px;
   height: 36px;
 }
 

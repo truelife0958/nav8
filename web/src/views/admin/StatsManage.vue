@@ -81,6 +81,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { getStatsSummary, getClickRanking } from '../../api';
+import { getCardLogo, onLogoError as handleLogoError } from '../../utils/logo';
 
 const stats = ref({});
 const clickRanking = ref([]);
@@ -105,20 +106,8 @@ function getRankClass(index) {
   return '';
 }
 
-function getCardLogo(card) {
-  if (card.custom_logo_path) return '/uploads/' + card.custom_logo_path;
-  if (card.logo_url) return card.logo_url;
-  if (!card.url) return '/default-favicon.png';
-  try {
-    const url = new URL(card.url);
-    return url.origin + '/favicon.ico';
-  } catch {
-    return '/default-favicon.png';
-  }
-}
-
 function onLogoError(e) {
-  e.target.src = '/default-favicon.png';
+  handleLogoError(e);
 }
 </script>
 

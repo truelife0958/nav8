@@ -395,7 +395,6 @@ function closeSider() {
 .header-title {
   flex: 1;
   text-align: center;
-  margin-left: 180px;
   font-size: 1.5rem;
   font-weight: 500;
   letter-spacing: 2px;
